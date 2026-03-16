@@ -5,9 +5,9 @@
     <AssemblyName>ConsoleApplication</AssemblyName>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <Version>3.1.0</Version>
-    <AssemblyVersion>3.1.0.0</AssemblyVersion>
-    <FileVersion>3.1.0.0</FileVersion>
+    <Version>3.5.0-alpha</Version>
+    <AssemblyVersion>3.5.0.0</AssemblyVersion>
+    <FileVersion>3.5.0.0</FileVersion>
     <Product>RPG Dungeon Crawler</Product>
     <Description>A text-based RPG dungeon crawler adventure game</Description>
     <Authors>Yogi</Authors>
