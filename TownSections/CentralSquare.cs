@@ -60,8 +60,8 @@ namespace Rpg_Dungeon
             if (input == "1")
             {
                 Console.WriteLine("\nYou approach Old Tom at the fountain...");
-                // Provide npcManager if available via a central game state in future; for now create a local one to resolve canonical quests
-                var npcManager = new NPCManager();
+                // Use shared NPC manager if available
+                var npcManager = Rpg_Dungeon.Systems.GameServices.NPCManager ?? new NPCManager();
                 DialogueManager.StartExampleDialogue(journal, npcManager);
             }
         }

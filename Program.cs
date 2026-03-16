@@ -28,6 +28,9 @@ namespace Rpg_Dungeon
                     ErrorLogger.LogWarning($"UTF-8 encoding failed: {ex.Message}", "Non-critical - continuing with default encoding");
                 }
 
+                // Initialize shared services
+                GameServices.NPCManager = new NPCManager();
+
                 // Check for updates in the background
                 CheckForUpdatesAsync();
 

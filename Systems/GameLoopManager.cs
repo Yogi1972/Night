@@ -27,7 +27,15 @@ namespace Rpg_Dungeon
             var timeTracker = new TimeOfDay();
             var journal = new Journal();
             var worldMap = new Map(weather, timeTracker, worldSeed);
-            var npcManager = new NPCManager();
+
+            // Use shared NPCManager when available; otherwise create and register one
+            var npcManager = Rpg_Dungeon.Systems.GameServices.NPCManager;
+            if (npcManager == null)
+            {
+                npcManager = new NPCManager();
+                Rpg_Dungeon.Systems.GameServices.NPCManager = npcManager;
+            }
+
             var mainStoryline = new MainStoryline();
             var fogOfWarMap = new FogOfWarMap();
 

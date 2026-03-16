@@ -16,6 +16,9 @@ namespace Rpg_Dungeon
         // Tracks whether the party has set up camp during this session.
         private static bool _hasCamped = false;
 
+        // Current save format version
+        private const int SaveFormatVersion = 1;
+
         #endregion
 
         #region Options Menu
@@ -379,6 +382,9 @@ namespace Rpg_Dungeon
                     }).ToList();
                 }
 
+                // Set save format version
+                save.Version = SaveFormatVersion;
+
                 var opts = new JsonSerializerOptions { WriteIndented = true };
                 var json = JsonSerializer.Serialize(save, opts);
                 File.WriteAllText(fileName, json, Encoding.UTF8);
@@ -526,6 +532,9 @@ namespace Rpg_Dungeon
                     }).ToList()
                 };
 
+                // Set save format version
+                save.Version = SaveFormatVersion;
+
                 var opts = new JsonSerializerOptions { WriteIndented = true };
                 var json = JsonSerializer.Serialize(save, opts);
                 File.WriteAllText(fileName, json, Encoding.UTF8);
@@ -573,6 +582,17 @@ namespace Rpg_Dungeon
                 var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var save = JsonSerializer.Deserialize<SaveFile>(json, opts);
                 if (save == null) return null;
+
+                // Run migration if save is older than current format
+                try
+                {
+                    if (save.Version < SaveFormatVersion)
+                    {
+                        Console.WriteLine("⚠️  Old save format detected - running migration...");
+                        MigrateSave(save);
+                    }
+                }
+                catch { }
 
                 var party = new List<Character>();
                 foreach (var cd in save.Party)
@@ -798,6 +818,7 @@ namespace Rpg_Dungeon
                                 Enum.TryParse<QuestType>(qd.Type, out type);
                                 var diff = QuestDifficulty.Easy;
                                 Enum.TryParse<QuestDifficulty>(qd.Difficulty, out diff);
+
                                 var quest = new Quest(qd.Name ?? "", qd.Description ?? "", type, diff,
                                                       qd.ObjectiveName ?? "Objective", qd.ObjectiveCount, qd.GoldReward, qd.ExperienceReward);
                                 quest.CurrentProgress = qd.CurrentProgress;
@@ -848,6 +869,9 @@ namespace Rpg_Dungeon
             // Optional simple journal persistence
             public List<QuestData>? ActiveQuests { get; set; }
             public List<QuestData>? CompletedQuests { get; set; }
+
+            // Format version for migration
+            public int Version { get; set; } = SaveFormatVersion;
         }
 
         internal class CharacterData
@@ -941,6 +965,27 @@ namespace Rpg_Dungeon
         {
             public string SkillName { get; set; } = string.Empty;
             public int CurrentRank { get; set; }
+        }
+
+        #endregion
+
+        #region Migration Helpers
+
+        private static void MigrateSave(SaveFile save)
+        {
+            // Simple migration stub - expand as formats evolve
+            try
+            {
+                // Example: if previous version 0 lacked Quest rewards, we could add defaults here.
+                Console.WriteLine($"🔧 Migrating save file from v{save.Version} to v{SaveFormatVersion} (no-op).\n");
+
+                // After migration logic, set to current version
+                save.Version = SaveFormatVersion;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"⚠️  Save migration failed: {ex.Message}");
+            }
         }
 
         #endregion
