@@ -60,8 +60,17 @@ namespace Rpg_Dungeon
             if (input == "1")
             {
                 Console.WriteLine("\nYou approach Old Tom at the fountain...");
-                // Use shared NPC manager if available
-                var npcManager = Rpg_Dungeon.Systems.GameServices.NPCManager ?? new NPCManager();
+                // Ensure a shared NPCManager instance is available
+                var npcManager = Rpg_Dungeon.Systems.GameServices.NPCManager;
+                if (npcManager == null)
+                {
+                    npcManager = new NPCManager();
+                    Rpg_Dungeon.Systems.GameServices.NPCManager = npcManager;
+                }
+
+                // Use provided or shared journal if available
+                journal ??= Rpg_Dungeon.Systems.GameServices.Journal;
+
                 DialogueManager.StartExampleDialogue(journal, npcManager);
             }
         }
