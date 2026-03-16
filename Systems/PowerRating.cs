@@ -83,6 +83,21 @@ namespace Rpg_Dungeon
             if (!string.IsNullOrEmpty(c.ChampionClass)) raw += 8.0;
             if (c.CurrentStance == CombatStance.Balanced) raw += 1.0;
 
+            // Mythic Title passive combat bonuses
+            if (c.HasMythicTitle)
+            {
+                raw += 12.0; // base bonus for having any Mythic Title
+                switch (c.MythicTitle)
+                {
+                    case "The Undying":  raw += 18.0; break; // survive killing blow
+                    case "The Wrathful": raw += 16.0; break; // double-strike chance
+                    case "The Sage":     raw += 14.0; break; // mana cost reduction
+                    case "The Ironclad": raw += 15.0; break; // ally damage intercept
+                    case "The Swift":    raw += 14.0; break; // dodge chance
+                    case "The Eternal":  raw += 13.0; break; // passive regen
+                }
+            }
+
             return Math.Max(0.0, raw);
         }
 

@@ -51,6 +51,16 @@ namespace Night.Characters
 
         public bool HasChampionClass => !string.IsNullOrEmpty(ChampionClass);
 
+        public string? MythicTitle { get; set; }
+
+        public bool HasMythicTitle => !string.IsNullOrEmpty(MythicTitle);
+
+        /// <summary>
+        /// Tracks whether "The Undying" passive has been used this combat.
+        /// Reset at the start of each encounter.
+        /// </summary>
+        public bool UndyingUsedThisCombat { get; set; }
+
         public CraftingProfession PrimaryProfession { get; set; }
 
         public CraftingProfession SecondaryProfession { get; set; }
@@ -96,6 +106,24 @@ namespace Night.Characters
             Intelligence += race.IntelligenceBonus;
             ArmorRating += race.ArmorBonus;
         }
+
+        /// <summary>
+        /// Applies a stat bonus from the Mythic Title system.
+        /// </summary>
+        public void ApplyMythicStatBonus(string stat, int amount)
+        {
+            switch (stat)
+            {
+                case "MaxHealth": MaxHealth += amount; Health += amount; break;
+                case "MaxMana": MaxMana += amount; Mana += amount; break;
+                case "MaxStamina": MaxStamina += amount; Stamina += amount; break;
+                case "Strength": Strength += amount; break;
+                case "Agility": Agility += amount; break;
+                case "Intelligence": Intelligence += amount; break;
+                case "ArmorRating": ArmorRating += amount; break;
+            }
+        }
+
         // Method to restore character progress (used when loading a saved game)
         public void RestoreProgress(int level, int experience, int health, int maxHealth, int mana, int maxMana, int stamina, int maxStamina, int str, int agi, int intel, int ar = 0)
         {
@@ -248,6 +276,18 @@ namespace Night.Characters
             }
 
             Health = Math.Max(0, Health - reducedDamage);
+
+            // Mythic Title: The Undying — survive a killing blow once per combat
+            if (Health <= 0 && HasMythicTitle && MythicTitle == "The Undying" && !UndyingUsedThisCombat)
+            {
+                UndyingUsedThisCombat = true;
+                Health = Math.Max(1, (int)(MaxHealth * 0.10));
+                Console.WriteLine();
+                Console.ForegroundColor = ConsoleColor.Magenta;
+                Console.WriteLine($"💀✨ {Name}'s Mythic Title \"The Undying\" activates! Survived a killing blow!");
+                Console.WriteLine($"   Revived with {Health} HP!");
+                Console.ResetColor();
+            }
         }
 
         public virtual void Heal(int amount)
@@ -294,12 +334,22 @@ namespace Night.Characters
 
         public int GetEffectiveManaCost(int baseCost)
         {
-            if (SkillTree == null) return baseCost;
+            double totalReduction = 0.0;
 
-            double efficiency = SkillTree.GetTotalManaEfficiencyPercent();
-            if (efficiency > 0)
+            if (SkillTree != null)
             {
-                int reducedCost = (int)(baseCost * (1.0 - efficiency));
+                totalReduction += SkillTree.GetTotalManaEfficiencyPercent();
+            }
+
+            // Mythic Title: The Sage — 20% mana cost reduction
+            if (HasMythicTitle && MythicTitle == "The Sage")
+            {
+                totalReduction += 0.20;
+            }
+
+            if (totalReduction > 0)
+            {
+                int reducedCost = (int)(baseCost * (1.0 - totalReduction));
                 return Math.Max(1, reducedCost);
             }
 

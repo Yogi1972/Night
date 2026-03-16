@@ -272,6 +272,18 @@ namespace Rpg_Dungeon
                 int threat = finalDamage;
                 if (member is Warrior) threat = (int)(threat * 1.5);
                 member.ThreatLevel += threat;
+
+                // Mythic Title: The Wrathful — chance to strike twice
+                if (mobHp > 0 && MythicTitleManager.RollWrathfulDoubleStrike(member))
+                {
+                    int bonusDamage = Math.Max(1, finalDamage / 2);
+                    mobHp = Math.Max(0, mobHp - bonusDamage);
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"🔥⚔️  {member.Name}'s \"The Wrathful\" strikes again! +{bonusDamage} bonus damage!");
+                    Console.ResetColor();
+                    VisualEffects.WriteInfo($"(mob HP: {mobHp}/{mob.Health})\n");
+                    member.ThreatLevel += bonusDamage;
+                }
             }
             else
             {

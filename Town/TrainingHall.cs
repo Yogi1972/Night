@@ -36,6 +36,7 @@ namespace Rpg_Dungeon
                 Console.WriteLine("1) View Available Trainers");
                 Console.WriteLine("2) Train a Character");
                 Console.WriteLine("3) View Training Costs");
+                Console.WriteLine("4) 🌟 Mythic Title Ascension (Lv 50)");
                 Console.WriteLine("0) Leave Training Hall");
                 Console.Write("Choice: ");
 
@@ -51,6 +52,9 @@ namespace Rpg_Dungeon
                         break;
                     case "3":
                         DisplayTrainingCosts(party);
+                        break;
+                    case "4":
+                        SelectMythicTitle(party);
                         break;
                     case "0":
                         Console.WriteLine("\n'Train hard, fight harder!' - The trainers salute you.");
@@ -129,6 +133,10 @@ namespace Rpg_Dungeon
             if (character.HasChampionClass)
             {
                 Console.WriteLine($"Champion Class: 🏆 {character.ChampionClass}");
+            }
+            if (character.HasMythicTitle)
+            {
+                Console.WriteLine($"Mythic Title: 🌟 \"{character.MythicTitle}\"");
             }
             Console.WriteLine($"Current Level: {character.Level}");
             Console.WriteLine($"Current XP: {character.Experience}/{character.ExperienceToNextLevel}");
@@ -528,6 +536,66 @@ namespace Rpg_Dungeon
                 "Oracle" => "To see the future is to shape it.",
                 _ => "Master your champion powers."
             };
+        }
+
+        private void SelectMythicTitle(List<Character> party)
+        {
+            if (party == null || party.Count == 0)
+            {
+                Console.WriteLine("No party members available!");
+                return;
+            }
+
+            // Find eligible characters
+            var eligible = new List<(int index, Character character)>();
+            for (int i = 0; i < party.Count; i++)
+            {
+                if (MythicTitleManager.CanSelectMythicTitle(party[i]))
+                {
+                    eligible.Add((i, party[i]));
+                }
+            }
+
+            if (eligible.Count == 0)
+            {
+                Console.WriteLine("\n🌟 Mythic Title Ascension");
+                Console.WriteLine("   No party members are eligible for a Mythic Title.");
+                Console.WriteLine("   Requirements: Level 50+ and no existing Mythic Title.");
+                Console.WriteLine();
+
+                // Show current mythic titles if any
+                foreach (var member in party)
+                {
+                    if (member.HasMythicTitle)
+                    {
+                        Console.WriteLine($"   ✦ {member.Name} — \"{member.MythicTitle}\"");
+                    }
+                    else if (member.Level < 50)
+                    {
+                        Console.WriteLine($"   ○ {member.Name} — Level {member.Level}/50");
+                    }
+                }
+
+                Console.WriteLine("\nPress any key to continue...");
+                Console.ReadKey(true);
+                return;
+            }
+
+            Console.WriteLine("\n🌟 Select a character for Mythic Title Ascension:");
+            for (int i = 0; i < eligible.Count; i++)
+            {
+                var (_, character) = eligible[i];
+                string championInfo = character.HasChampionClass ? $" [🏆{character.ChampionClass}]" : "";
+                Console.WriteLine($"  [{i + 1}] {character.Name} - Lv.{character.Level} {character.GetType().Name}{championInfo}");
+            }
+            Console.WriteLine($"  [0] Cancel");
+            Console.Write("Choice: ");
+
+            var input = Console.ReadLine()?.Trim() ?? "";
+            if (int.TryParse(input, out int choice) && choice >= 1 && choice <= eligible.Count)
+            {
+                MythicTitleManager.ShowMythicTitleSelection(eligible[choice - 1].character);
+            }
         }
 
         #endregion

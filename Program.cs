@@ -128,6 +128,16 @@ namespace Rpg_Dungeon
                     ErrorLogger.LogWarning($"UTF-8 encoding failed: {ex.Message}", "Non-critical - continuing with default encoding");
                 }
 
+                // Enable mouse input for hover tooltips
+                if (MouseInput.Enable())
+                {
+                    Console.WriteLine("🖱️  Mouse input enabled.");
+                }
+                else
+                {
+                    Console.WriteLine("⚠️  Mouse input not available (tooltips will use keyboard only).");
+                }
+
                 // Initialize shared services
                 GameServices.NPCManager = new NPCManager();
 
@@ -171,6 +181,7 @@ namespace Rpg_Dungeon
                     Thread.Sleep(1000);
                 }
 
+                MouseInput.Disable();
                 Environment.Exit(1);
             }
         }

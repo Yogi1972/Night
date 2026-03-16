@@ -38,6 +38,14 @@ namespace Rpg_Dungeon.Systems
         Pong,
         Heartbeat,
         Disconnect
+        ,
+        // Trade protocol (simple messages for reservation/commit)
+        TradeReserve,
+        TradeRelease,
+        TradeCommit,
+        TradeAck,
+        TradeFail,
+        TradeLeaseUpdate
     }
 
     /// <summary>

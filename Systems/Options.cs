@@ -17,7 +17,7 @@ namespace Rpg_Dungeon
         private static bool _hasCamped = false;
 
         // Current save format version
-        private const int SaveFormatVersion = 1;
+        private const int SaveFormatVersion = 3;
 
         #endregion
 
@@ -195,6 +195,7 @@ namespace Rpg_Dungeon
                         Agility = p.Agility,
                         Intelligence = p.Intelligence,
                         ChampionClass = p.ChampionClass,
+                        MythicTitle = p.MythicTitle,
                         Pet = p.Pet == null ? null : new PetData
                         {
                             Name = p.Pet.Name,
@@ -350,6 +351,28 @@ namespace Rpg_Dungeon
                                 MaxStaminaBonus = it is Equipment ex6 ? ex6.MaxStaminaBonus : 0,
                                 ArmorBonus = it is Equipment ex7 ? ex7.ArmorBonus : 0
                             }).ToList()
+                            ,
+                            RecycleBin = p.Inventory.RecycleBin.Select(re => new RecycleEntryData
+                            {
+                                Item = re.Item == null ? null : new ItemData
+                                {
+                                    Type = re.Item is Torch ? "Torch" : re.Item is Backpack ? "Backpack" : re.Item is Equipment ? "Equipment" : "Generic",
+                                    Name = re.Item.Name,
+                                    Price = re.Item.Price,
+                                    Slots = re.Item is Backpack b ? b.Slots : 0,
+                                    EquipmentType = re.Item is Equipment eq ? eq.Type.ToString() : "",
+                                    Durability = re.Item is Equipment e ? e.Durability : 0,
+                                    MaxDurability = re.Item is Equipment e2 ? e2.MaxDurability : 0
+                                },
+                                OriginalSlot = re.OriginalSlot,
+                                RemovedAtUtc = re.RemovedAtUtc
+                            }).ToList(),
+                            Reservations = p.Inventory.GetReservations().Select(kv => new ReservationData
+                            {
+                                ReservationId = kv.Key.ToString(),
+                                SlotIndex = kv.Value,
+                                ExpiresAtUtc = null
+                            }).ToList()
                         }
                     }).ToList()
                 };
@@ -429,6 +452,7 @@ namespace Rpg_Dungeon
                         Agility = p.Agility,
                         Intelligence = p.Intelligence,
                         ChampionClass = p.ChampionClass,
+                        MythicTitle = p.MythicTitle,
                         Pet = p.Pet == null ? null : new PetData
                         {
                             Name = p.Pet.Name,
@@ -589,7 +613,7 @@ namespace Rpg_Dungeon
                     if (save.Version < SaveFormatVersion)
                     {
                         Console.WriteLine("⚠️  Old save format detected - running migration...");
-                        MigrateSave(save);
+                        MigrateSaveIfNeeded(save);
                     }
                 }
                 catch { }
@@ -632,6 +656,12 @@ namespace Rpg_Dungeon
                     if (!string.IsNullOrEmpty(cd.ChampionClass))
                     {
                         ch.ChampionClass = cd.ChampionClass;
+                    }
+
+                    // Restore mythic title if present
+                    if (!string.IsNullOrEmpty(cd.MythicTitle))
+                    {
+                        ch.MythicTitle = cd.MythicTitle;
                     }
 
                     // Restore pet if present
@@ -892,6 +922,7 @@ namespace Rpg_Dungeon
             public int Agility { get; set; }
             public int Intelligence { get; set; }
             public string? ChampionClass { get; set; }
+            public string? MythicTitle { get; set; }
             public InventoryData? Inventory { get; set; }
             public PetData? Pet { get; set; }
             public SkillTreeData? SkillTree { get; set; }
@@ -909,6 +940,24 @@ namespace Rpg_Dungeon
             public ItemData? EquippedRing2 { get; set; }
             public ItemData? EquippedOffHand { get; set; }
             public List<ItemData?>? Slots { get; set; }
+            // Recycle bin entries persisted as ItemData + original slot + removed timestamp
+            public List<RecycleEntryData>? RecycleBin { get; set; }
+            // Active reservations persisted as reservation id -> slot mapping
+            public List<ReservationData>? Reservations { get; set; }
+        }
+
+        internal class RecycleEntryData
+        {
+            public ItemData? Item { get; set; }
+            public int OriginalSlot { get; set; }
+            public DateTime RemovedAtUtc { get; set; }
+        }
+
+        internal class ReservationData
+        {
+            public string ReservationId { get; set; } = string.Empty;
+            public int SlotIndex { get; set; }
+            public DateTime? ExpiresAtUtc { get; set; }
         }
 
         internal class ItemData
@@ -972,16 +1021,83 @@ namespace Rpg_Dungeon
 
         #region Migration Helpers
 
-        private static void MigrateSave(SaveFile save)
+        // Public migration helper so other systems can upgrade save files before loading
+        public static void MigrateSaveIfNeeded(SaveFile save)
         {
-            // Simple migration stub - expand as formats evolve
+            if (save == null) return;
             try
             {
-                // Example: if previous version 0 lacked Quest rewards, we could add defaults here.
-                Console.WriteLine($"🔧 Migrating save file from v{save.Version} to v{SaveFormatVersion} (no-op).\n");
+                if (save.Version >= SaveFormatVersion) return;
 
-                // After migration logic, set to current version
-                save.Version = SaveFormatVersion;
+                Console.WriteLine($"🔧 Migrating save file from v{save.Version} to v{SaveFormatVersion}...");
+
+                // Migration path from v0 -> v1 -> v2 (apply successive upgrades)
+                if (save.Version < 1)
+                {
+                    // v0 -> v1: ensure optional lists are non-null and defaults are set
+                    foreach (var cd in save.Party)
+                    {
+                        if (cd.Inventory == null) cd.Inventory = new InventoryData();
+                        if (cd.Inventory.Slots == null) cd.Inventory.Slots = new List<ItemData?>();
+                        if (cd.SkillTree == null) cd.SkillTree = new SkillTreeData();
+                        if (cd.Pet == null) cd.Pet = null; // keep as-is
+                    }
+                    save.Version = 1;
+                }
+
+                if (save.Version < 2)
+                {
+                    // v1 -> v2: stabilize item durability fields and ensure equipped items exist in inventory slots
+                    foreach (var cd in save.Party)
+                    {
+                        if (cd.Inventory == null) cd.Inventory = new InventoryData();
+
+                        // Ensure slots list
+                        if (cd.Inventory.Slots == null) cd.Inventory.Slots = new List<ItemData?>();
+
+                        // Normalize item entries
+                        for (int i = 0; i < cd.Inventory.Slots.Count; i++)
+                        {
+                            var it = cd.Inventory.Slots[i];
+                            if (it == null) continue;
+                            if (string.IsNullOrEmpty(it.Type)) it.Type = "Generic";
+                            if (string.IsNullOrEmpty(it.Name)) it.Name = "Unknown Item";
+                            // Ensure durability fields are non-negative
+                            if (it.Durability < 0) it.Durability = 0;
+                            if (it.MaxDurability <= 0) it.MaxDurability = Math.Max(1, it.Durability);
+                        }
+
+                        // Ensure equipped items have sane durability
+                        var equipList = new ItemData?[] { cd.Inventory.EquippedWeapon, cd.Inventory.EquippedArmor, cd.Inventory.EquippedAccessory, cd.Inventory.EquippedNecklace, cd.Inventory.EquippedRing1, cd.Inventory.EquippedRing2, cd.Inventory.EquippedOffHand };
+                        foreach (var ed in equipList)
+                        {
+                            if (ed == null) continue;
+                            if (ed.Durability < 0) ed.Durability = 0;
+                            if (ed.MaxDurability <= 0) ed.MaxDurability = Math.Max(1, ed.Durability);
+                        }
+                    }
+
+                    save.Version = 2;
+                }
+
+                if (save.Version < 3)
+                {
+                    // v2 -> v3: add support for persisting recycle bin entries and reservations
+                    foreach (var cd in save.Party)
+                    {
+                        if (cd.Inventory == null) cd.Inventory = new InventoryData();
+                        if (cd.Inventory.RecycleBin == null) cd.Inventory.RecycleBin = new List<RecycleEntryData>();
+                        if (cd.Inventory.Reservations == null) cd.Inventory.Reservations = new List<ReservationData>();
+                        // Normalize reservation ids (ensure string format)
+                        foreach (var r in cd.Inventory.Reservations)
+                        {
+                            if (string.IsNullOrWhiteSpace(r.ReservationId)) r.ReservationId = Guid.NewGuid().ToString();
+                        }
+                    }
+                    save.Version = 3;
+                }
+
+                Console.WriteLine("🔧 Migration complete.");
             }
             catch (Exception ex)
             {

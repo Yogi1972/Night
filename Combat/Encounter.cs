@@ -215,6 +215,22 @@ namespace Rpg_Dungeon
                                      member.GetTotalStrength() +
                                      member.GetTotalAgility() +
                                      member.GetTotalIntelligence();
+
+                    // Mythic Title passives add effective combat power
+                    if (member.HasMythicTitle)
+                    {
+                        memberPower += member.MythicTitle switch
+                        {
+                            "The Undying"  => 40, // survive killing blow
+                            "The Wrathful" => 35, // double-strike chance
+                            "The Sage"     => 30, // mana cost reduction
+                            "The Ironclad" => 35, // ally damage intercept
+                            "The Swift"    => 30, // dodge chance
+                            "The Eternal"  => 28, // passive regen
+                            _ => 20
+                        };
+                    }
+
                     _partyTotalPower += memberPower;
                 }
             }

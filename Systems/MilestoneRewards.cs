@@ -70,6 +70,15 @@ namespace Rpg_Dungeon
                 LegendaryItemSystem.AnnounceItemFound(legendaryItem);
                 character.Inventory.AddItem(legendaryItem);
                 VisualEffects.WriteSuccess($"✨ {legendaryItem.Name} has been added to your inventory!\n");
+
+                // Offer Mythic Title ascension
+                if (MythicTitleManager.CanSelectMythicTitle(character))
+                {
+                    Console.WriteLine("\n🌟 You have unlocked MYTHIC TITLE ASCENSION!");
+                    Console.WriteLine("   Press any key to choose your Mythic Title...");
+                    Console.ReadKey(true);
+                    MythicTitleManager.ShowMythicTitleSelection(character);
+                }
             }
             else if (level == 75)
             {

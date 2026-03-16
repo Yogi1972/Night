@@ -24,10 +24,9 @@ namespace Rpg_Dungeon.Systems
         private bool _isHost;
         private bool _isConnected;
         private string _playerId;
-        private Thread? _receiveThread;
         private Thread? _heartbeatThread;
-        private Queue<NetworkMessage> _messageQueue;
-        private readonly object _queueLock = new();
+        private System.Threading.CancellationTokenSource? _cts;
+        private System.Collections.Concurrent.ConcurrentQueue<NetworkMessage> _messageQueue;
 
         // Reconnection support
         private string _sessionId;
@@ -41,7 +40,34 @@ namespace Rpg_Dungeon.Systems
         private const int HEARTBEAT_TIMEOUT_MS = 15000;
 
         // Connected clients (for host)
-        private readonly Dictionary<string, ClientConnection> _connectedClients = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ClientConnection> _connectedClients = new System.Collections.Concurrent.ConcurrentDictionary<string, ClientConnection>();
+
+        // Lightweight client connection wrapper
+        private class ClientConnection : IDisposable
+        {
+            public string PlayerId { get; }
+            public TcpClient? Client { get; }
+            public NetworkStream? Stream { get; }
+            public string ReconnectToken { get; set; } = string.Empty;
+            public volatile bool IsConnected = true;
+            public DateTime LastHeartbeat { get; set; } = DateTime.UtcNow;
+
+            public ClientConnection(TcpClient client, NetworkStream stream)
+            {
+                PlayerId = Guid.NewGuid().ToString();
+                Client = client;
+                Stream = stream;
+                LastHeartbeat = DateTime.UtcNow;
+            }
+
+            public void Dispose()
+            {
+                try { Stream?.Close(); } catch { }
+                try { Client?.Close(); } catch { }
+            }
+        }
+        private Timer? _clientPruneTimer;
+        private const int MAX_CLIENTS = 8; // per-host limit to avoid OOM under heavy connection churn
 
         public const int DEFAULT_PORT = 7777;
 
@@ -74,10 +100,17 @@ namespace Rpg_Dungeon.Systems
             _playerId = Guid.NewGuid().ToString();
             _sessionId = Guid.NewGuid().ToString();
             _reconnectToken = Guid.NewGuid().ToString();
-            _messageQueue = new Queue<NetworkMessage>();
+            _messageQueue = new System.Collections.Concurrent.ConcurrentQueue<NetworkMessage>();
             _lastHeartbeat = DateTime.UtcNow;
             _attemptingReconnect = false;
             _reconnectAttempts = 0;
+            // Start periodic pruning of stale clients
+            try
+            {
+                _clientPruneTimer = new Timer(_ => PruneClients(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+            }
+            catch { }
+            _cts = new System.Threading.CancellationTokenSource();
         }
 
         #endregion
@@ -129,7 +162,8 @@ namespace Rpg_Dungeon.Systems
                     Console.WriteLine($"🎮 Player connected from {((IPEndPoint)client.Client.RemoteEndPoint!).Address}");
                     
                     // Handle this client in a separate task
-                    _ = Task.Run(() => HandleClient(client));
+                    // start an async client handler to avoid blocking thread-pool
+                    _ = Task.Run(() => HandleClientAsync(client, _cts?.Token ?? System.Threading.CancellationToken.None));
                 }
                 catch (Exception ex)
                 {
@@ -143,33 +177,55 @@ namespace Rpg_Dungeon.Systems
         }
 
         /// <summary>
-        /// Handle individual client connection
+        /// Handle individual client connection asynchronously
         /// </summary>
-        private void HandleClient(TcpClient client)
+        private async System.Threading.Tasks.Task HandleClientAsync(TcpClient client, System.Threading.CancellationToken ct)
         {
+            ClientConnection? conn = null;
             try
             {
                 var stream = client.GetStream();
+                conn = new ClientConnection(client, stream);
+                _connectedClients[conn.PlayerId] = conn;
+
                 var buffer = new byte[4096];
 
-                while (_isHost && client.Connected)
+                while (_isHost && client.Connected && !ct.IsCancellationRequested)
                 {
-                    var bytesRead = stream.Read(buffer, 0, buffer.Length);
-                    if (bytesRead > 0)
+                    try
                     {
-                        var json = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        var message = NetworkMessage.FromJson(json);
-                        
-                        if (message != null)
+                        var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false);
+                        if (bytesRead > 0)
                         {
-                            EnqueueMessage(message);
+                            var json = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                            var message = NetworkMessage.FromJson(json);
+                            if (message != null)
+                            {
+                                message.SenderId = conn.PlayerId;
+                                EnqueueMessage(message);
+                            }
                         }
+                        else
+                        {
+                            // remote closed
+                            break;
+                        }
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Client receive error: {ex.Message}");
+                        break;
                     }
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                Console.WriteLine($"Client disconnected: {ex.Message}");
+                if (conn != null)
+                {
+                    _connectedClients.TryRemove(conn.PlayerId, out _);
+                    conn.Dispose();
+                }
             }
         }
 
@@ -192,10 +248,8 @@ namespace Rpg_Dungeon.Systems
 
                 Console.WriteLine($"✅ Connected to server at {ipAddress}:{port}");
 
-                // Start receiving messages
-                _receiveThread = new Thread(ReceiveMessages);
-                _receiveThread.IsBackground = true;
-                _receiveThread.Start();
+                // Start receiving messages asynchronously
+                _ = System.Threading.Tasks.Task.Run(() => ReceiveMessagesAsync(_cts?.Token ?? System.Threading.CancellationToken.None));
 
                 return true;
             }
@@ -207,22 +261,21 @@ namespace Rpg_Dungeon.Systems
         }
 
         /// <summary>
-        /// Receive messages from server
+        /// Async receive loop for client
         /// </summary>
-        private void ReceiveMessages()
+        private async System.Threading.Tasks.Task ReceiveMessagesAsync(System.Threading.CancellationToken ct)
         {
             var buffer = new byte[4096];
 
-            while (_isConnected && _stream != null)
+            while (_isConnected && _stream != null && !ct.IsCancellationRequested)
             {
                 try
                 {
-                    var bytesRead = _stream.Read(buffer, 0, buffer.Length);
+                    var bytesRead = await _stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false);
                     if (bytesRead > 0)
                     {
                         var json = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                         var message = NetworkMessage.FromJson(json);
-                        
                         if (message != null)
                         {
                             EnqueueMessage(message);
@@ -234,6 +287,7 @@ namespace Rpg_Dungeon.Systems
                         break;
                     }
                 }
+                catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
                     if (_isConnected)
@@ -284,12 +338,23 @@ namespace Rpg_Dungeon.Systems
         /// </summary>
         private void EnqueueMessage(NetworkMessage message)
         {
-            lock (_queueLock)
-            {
-                _messageQueue.Enqueue(message);
-            }
+            // Use concurrent queue to avoid locks and potential contention
+            _messageQueue.Enqueue(message);
 
-            OnMessageReceived?.Invoke(message);
+            // Invoke handlers asynchronously to avoid blocking network threads
+            try
+            {
+                var handler = OnMessageReceived;
+                if (handler != null)
+                {
+                    // Invoke asynchronously so slow handlers don't block network threads
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try { handler.Invoke(message); } catch { }
+                    });
+                }
+            }
+            catch { }
         }
 
         /// <summary>
@@ -297,12 +362,12 @@ namespace Rpg_Dungeon.Systems
         /// </summary>
         public List<NetworkMessage> GetPendingMessages()
         {
-            lock (_queueLock)
+            var messages = new List<NetworkMessage>();
+            while (_messageQueue.TryDequeue(out var msg))
             {
-                var messages = _messageQueue.ToList();
-                _messageQueue.Clear();
-                return messages;
+                messages.Add(msg);
             }
+            return messages;
         }
 
         #endregion
@@ -345,6 +410,9 @@ namespace Rpg_Dungeon.Systems
                 _client?.Close();
                 _server?.Stop();
                 _heartbeatThread?.Join(1000);
+                try { _cts?.Cancel(); } catch { }
+                try { _cts?.Dispose(); } catch { }
+                try { _clientPruneTimer?.Dispose(); } catch { }
 
                 Console.WriteLine("🔌 Disconnected from network");
             }
@@ -398,10 +466,8 @@ namespace Rpg_Dungeon.Systems
                         _attemptingReconnect = false;
                         _reconnectAttempts = 0;
 
-                        // Restart receive thread
-                        _receiveThread = new Thread(ReceiveMessages);
-                        _receiveThread.IsBackground = true;
-                        _receiveThread.Start();
+                        // Restart receive loop
+                        _ = System.Threading.Tasks.Task.Run(() => ReceiveMessagesAsync(_cts?.Token ?? System.Threading.CancellationToken.None));
 
                         // Restart heartbeat
                         StartHeartbeat();
@@ -490,8 +556,9 @@ namespace Rpg_Dungeon.Systems
                         if (_isHost)
                         {
                             // Check all clients for timeout
-                            foreach (var client in _connectedClients.Values)
+                            foreach (var kv in _connectedClients)
                             {
+                                var client = kv.Value;
                                 var timeSinceHeartbeat = DateTime.UtcNow - client.LastHeartbeat;
                                 if (timeSinceHeartbeat.TotalMilliseconds > HEARTBEAT_TIMEOUT_MS)
                                 {
@@ -535,6 +602,46 @@ namespace Rpg_Dungeon.Systems
             });
             _heartbeatThread.IsBackground = true;
             _heartbeatThread.Start();
+        }
+
+        private void PruneClients()
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                var toRemove = new System.Collections.Generic.List<string>();
+                foreach (var kv in _connectedClients)
+                {
+                    var client = kv.Value;
+                    if (!client.IsConnected && (now - client.LastHeartbeat).TotalMinutes > 5)
+                    {
+                        toRemove.Add(kv.Key);
+                    }
+                }
+
+                foreach (var id in toRemove)
+                {
+                    if (_connectedClients.TryRemove(id, out var removed))
+                    {
+                        try { removed.Dispose(); } catch { }
+                        Console.WriteLine($"🧹 Pruned stale client: {id}");
+                    }
+                }
+
+                if (_connectedClients.Count > MAX_CLIENTS)
+                {
+                    var drop = _connectedClients.Values.OrderBy(c => c.LastHeartbeat).Take(_connectedClients.Count - MAX_CLIENTS).ToList();
+                    foreach (var c in drop)
+                    {
+                        if (_connectedClients.TryRemove(c.PlayerId, out var rem))
+                        {
+                            try { rem.Dispose(); } catch { }
+                            Console.WriteLine($"🧹 Dropped client due to capacity: {c.PlayerId}");
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
         /// <summary>

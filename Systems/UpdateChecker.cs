@@ -716,7 +716,8 @@ namespace Rpg_Dungeon.Systems
                 "",
                 "# Copy new files",
                 "$sourceDir = '{SOURCE}'",
-                "$targetDir = '{TARGET}'",
+                "$exePath = '{EXE}'",
+                "$targetDir = Split-Path -Path $exePath -Parent",
                 "",
                 "try {",
                 "    # Create timestamped backup folder and copy user-critical files",
@@ -752,7 +753,7 @@ namespace Rpg_Dungeon.Systems
                 "    Start-Sleep -Seconds 2",
                 "",
                 "    # Restart game",
-                $"    Start-Process -FilePath '{currentExe.Replace("'", "''")}' -WorkingDirectory $targetDir",
+                "    Start-Process -FilePath '{EXE}' -WorkingDirectory $targetDir",
                 "    # Cleanup installer temporary files (do not remove backups)",
                 "    Start-Sleep -Seconds 2",
                 "    Remove-Item -Path $sourceDir -Recurse -Force -ErrorAction SilentlyContinue",
@@ -784,7 +785,7 @@ namespace Rpg_Dungeon.Systems
                 "    } catch { }",
                 "",
                 "    Write-Host 'Restarting game...' -ForegroundColor Cyan",
-                $"    Start-Process -FilePath '{currentExe.Replace("'", "''")}' -WorkingDirectory $targetDir",
+                "    Start-Process -FilePath '{EXE}' -WorkingDirectory $targetDir",
                 "",
                 "    Start-Sleep -Seconds 5",
                 "}"
@@ -793,9 +794,7 @@ namespace Rpg_Dungeon.Systems
             string script = string.Join(Environment.NewLine, scriptLines);
             // Replace placeholders with safe escaped values
             script = script.Replace("{EXE}", escExe);
-            script = script.Replace("{TMPZIP}", tempZipRel);
             script = script.Replace("{SOURCE}", extractPath.Replace("'", "''"));
-            script = script.Replace("{TARGET}", currentDir.Replace("'", "''"));
             File.WriteAllText(scriptPath, script);
             return scriptPath;
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace Rpg_Dungeon
 {
@@ -25,7 +26,8 @@ namespace Rpg_Dungeon
         #region Constructor
 
         public Equipment(string name, EquipmentType type, int maxDurability, int price = 50,
-                        int str = 0, int agi = 0, int intel = 0, int hp = 0, int mana = 0, int stamina = 0, int armor = 0) : base(name, price)
+                        int str = 0, int agi = 0, int intel = 0, int hp = 0, int mana = 0, int stamina = 0, int armor = 0,
+                        Rarity rarity = Rarity.Common, int quality = 100, string? description = null) : base(name, price, rarity, quality, description)
         {
             MaxDurability = Math.Max(1, maxDurability);
             Durability = MaxDurability;
@@ -55,6 +57,17 @@ namespace Rpg_Dungeon
             if (missing <= 0) return 0;
             int costPerPoint = Math.Max(1, base.Price / 10);
             return missing * costPerPoint;
+        }
+
+        public override string GetTooltip()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"{Name} ({Rarity})");
+            if (!string.IsNullOrWhiteSpace(Description)) sb.AppendLine(Description);
+            sb.AppendLine($"Quality: {Quality}% | Durability: {Durability}/{MaxDurability}");
+            sb.AppendLine($"STR+{StrengthBonus} AGI+{AgilityBonus} INT+{IntelligenceBonus} HP+{MaxHPBonus} Mana+{MaxManaBonus} AR+{ArmorBonus}");
+            sb.AppendLine($"Price: {Price}g");
+            return sb.ToString().TrimEnd();
         }
 
         public void Repair()

@@ -1,5 +1,6 @@
 using Night.Characters;
 using Rpg_Dungeon;
+using Rpg_Dungeon.Systems;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +22,58 @@ namespace Night.Shops
             Price = price;
             Quantity = quantity;
         }
+
+        // Sample local trade flow demonstrating reservations and commit using TradeManager
+        protected void TradeBetweenParty(List<Character> party)
+        {
+            Console.WriteLine("\n=== PARTY TRADE DEMO ===");
+            Console.WriteLine("Select source (who will give an item):");
+            for (int i = 0; i < party.Count; i++) Console.WriteLine($"{i + 1}) {party[i].Name}");
+            var a = Console.ReadLine() ?? string.Empty;
+            if (!int.TryParse(a, out var aIdx) || aIdx < 1 || aIdx > party.Count) { Console.WriteLine("Invalid."); return; }
+            var src = party[aIdx - 1];
+
+            Console.WriteLine("Select slot index to offer:");
+            var slots = src.Inventory.Slots;
+            for (int i = 0; i < slots.Count; i++) Console.WriteLine($"{i + 1}) {(slots[i] == null ? "(empty)" : slots[i]!.Name)}");
+            var s = Console.ReadLine() ?? string.Empty;
+            if (!int.TryParse(s, out var slotIdx) || slotIdx < 1 || slotIdx > slots.Count) { Console.WriteLine("Invalid."); return; }
+            var slot = slotIdx - 1;
+
+            Console.WriteLine("Select destination (who will receive the item):");
+            for (int i = 0; i < party.Count; i++) if (i != aIdx - 1) Console.WriteLine($"{i + 1}) {party[i].Name}");
+            var b = Console.ReadLine() ?? string.Empty;
+            if (!int.TryParse(b, out var bIdx) || bIdx < 1 || bIdx > party.Count || bIdx == aIdx) { Console.WriteLine("Invalid."); return; }
+            var dst = party[bIdx - 1];
+
+            // Reserve item on source
+            var res = TradeManager.ReserveItem(src, slot);
+            if (res == null)
+            {
+                Console.WriteLine("Failed to reserve item - it may be missing or already reserved.");
+                return;
+            }
+
+            Console.WriteLine("Reservation successful. Commit trade? (y/n)");
+            var conf = Console.ReadLine() ?? string.Empty;
+            if (!conf.Trim().Equals("y", StringComparison.OrdinalIgnoreCase))
+            {
+                TradeManager.ReleaseReservation(res.Value);
+                Console.WriteLine("Trade cancelled and reservation released.");
+                return;
+            }
+
+            // Commit trade
+            var ok = TradeManager.CommitTrade(new[] { res.Value }, dst);
+            if (ok)
+            {
+                Console.WriteLine("Trade committed successfully.");
+            }
+            else
+            {
+                Console.WriteLine("Trade failed during commit. Reservation released.");
+            }
+        }
     }
 
     #endregion
@@ -34,14 +87,19 @@ namespace Night.Shops
 
         protected void BuyFromStock(List<Character> party, List<StockEntry<GenericItem>> stock, string stockName)
         {
+            Rpg_Dungeon.Systems.MouseInput.ClearRegions();
             Console.WriteLine($"Available {stockName}:");
             for (int i = 0; i < stock.Count; i++)
             {
                 var e = stock[i];
-                Console.WriteLine($"{i + 1}) {e.Item.Name} - Price {e.Price} (On hand: {e.Quantity})");
+                int lineY = Console.CursorTop;
+                string lineText = $"{i + 1}) {e.Item.Name} - Price {e.Price} (On hand: {e.Quantity})";
+                Console.WriteLine(lineText);
+                Rpg_Dungeon.Systems.MouseInput.RegisterItemRegion(0, lineY, lineText.Length, 1, e.Item);
             }
             Console.WriteLine("Choose item number to buy or 0 to cancel:");
             var s = Console.ReadLine() ?? string.Empty;
+            Rpg_Dungeon.Systems.MouseInput.ClearRegions();
             if (!int.TryParse(s, out var idx) || idx < 0 || idx > stock.Count) { Console.WriteLine("Invalid."); return; }
             if (idx == 0) return;
             var entry = stock[idx - 1];
@@ -92,15 +150,20 @@ namespace Night.Shops
 
         protected void BuyEquipment(List<Character> party, List<StockEntry<Equipment>> equipStock)
         {
+            Rpg_Dungeon.Systems.MouseInput.ClearRegions();
             Console.WriteLine("Available equipment:");
             for (int i = 0; i < equipStock.Count; i++)
             {
                 var e = equipStock[i];
                 string stats = $"STR+{e.Item.StrengthBonus} AGI+{e.Item.AgilityBonus} INT+{e.Item.IntelligenceBonus} HP+{e.Item.MaxHPBonus} Mana+{e.Item.MaxManaBonus} AR+{e.Item.ArmorBonus}";
-                Console.WriteLine($"{i + 1}) {e.Item.Name} [{e.Item.Type}] - Price {e.Price} (Dur {e.Item.MaxDurability}) [{stats}] (On hand: {e.Quantity})");
+                int lineY = Console.CursorTop;
+                string lineText = $"{i + 1}) {e.Item.Name} [{e.Item.Type}] - Price {e.Price} (Dur {e.Item.MaxDurability}) [{stats}] (On hand: {e.Quantity})";
+                Console.WriteLine(lineText);
+                Rpg_Dungeon.Systems.MouseInput.RegisterItemRegion(0, lineY, lineText.Length, 1, e.Item);
             }
             Console.WriteLine("Choose equipment number to buy or 0 to cancel:");
             var s = Console.ReadLine() ?? string.Empty;
+            Rpg_Dungeon.Systems.MouseInput.ClearRegions();
             if (!int.TryParse(s, out var idx) || idx < 0 || idx > equipStock.Count) { Console.WriteLine("Invalid."); return; }
             if (idx == 0) return;
             var entry = equipStock[idx - 1];
@@ -126,9 +189,9 @@ namespace Night.Shops
             {
                 Console.WriteLine($"\n=== EQUIPMENT COMPARISON ===");
                 Console.WriteLine($"Currently Equipped: {currentEquip.Name}");
-                Console.WriteLine($"  STR: {currentEquip.StrengthBonus} | AGI: {currentEquip.AgilityBonus} | INT: {currentEquip.IntelligenceBonus} | HP: {currentEquip.MaxHPBonus} | Mana: {currentEquip.MaxManaBonus} | AR: {currentEquip.ArmorBonus}");
+                Console.WriteLine(currentEquip.GetTooltip());
                 Console.WriteLine($"New Item: {entry.Item.Name}");
-                Console.WriteLine($"  STR: {entry.Item.StrengthBonus} | AGI: {entry.Item.AgilityBonus} | INT: {entry.Item.IntelligenceBonus} | HP: {entry.Item.MaxHPBonus} | Mana: {entry.Item.MaxManaBonus} | AR: {entry.Item.ArmorBonus}");
+                Console.WriteLine(entry.Item.GetTooltip());
                 Console.WriteLine($"Difference:");
                 Console.WriteLine($"  STR: {entry.Item.StrengthBonus - currentEquip.StrengthBonus:+#;-#;0} | AGI: {entry.Item.AgilityBonus - currentEquip.AgilityBonus:+#;-#;0} | INT: {entry.Item.IntelligenceBonus - currentEquip.IntelligenceBonus:+#;-#;0} | HP: {entry.Item.MaxHPBonus - currentEquip.MaxHPBonus:+#;-#;0} | Mana: {entry.Item.MaxManaBonus - currentEquip.MaxManaBonus:+#;-#;0} | AR: {entry.Item.ArmorBonus - currentEquip.ArmorBonus:+#;-#;0}");
                 Console.WriteLine("============================\n");

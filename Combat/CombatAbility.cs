@@ -85,7 +85,7 @@ namespace Rpg_Dungeon
 
             return ResourceType switch
             {
-                ResourceType.Mana => user.Mana >= ResourceCost,
+                ResourceType.Mana => user.Mana >= user.GetEffectiveManaCost(ResourceCost),
                 ResourceType.Stamina => user.Stamina >= ResourceCost,
                 ResourceType.Health => user.Health > ResourceCost,
                 ResourceType.None => true,
@@ -101,7 +101,14 @@ namespace Rpg_Dungeon
             switch (ResourceType)
             {
                 case ResourceType.Mana:
-                    user.ModifyMana(-ResourceCost);
+                    int effectiveManaCost = user.GetEffectiveManaCost(ResourceCost);
+                    if (effectiveManaCost < ResourceCost)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.Write($" [📖 Mana Reduced: {ResourceCost} → {effectiveManaCost}]");
+                        Console.ResetColor();
+                    }
+                    user.ModifyMana(-effectiveManaCost);
                     break;
                 case ResourceType.Stamina:
                     user.ModifyStamina(-ResourceCost);

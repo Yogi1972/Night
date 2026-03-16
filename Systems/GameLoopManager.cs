@@ -205,6 +205,7 @@ namespace Rpg_Dungeon
                         Console.WriteLine("\n💾 Auto-saving your progress...");
                         Options.SaveGameAutomatic(party, _isMultiplayerMode);
                         Console.WriteLine("✅ Progress saved! Thanks for playing! 👋");
+                        Rpg_Dungeon.Systems.MouseInput.Disable();
                         System.Threading.Thread.Sleep(1500);
                         Environment.Exit(0);
                     }
@@ -261,6 +262,17 @@ namespace Rpg_Dungeon
                 string playerTag = multiplayer.IsSessionActive() ? $" {multiplayer.GetPlayerTag(p)}" : "";
 
                 VisualEffects.WriteLineColored($"▸ {p.Name}{playerTag} (Lv {p.Level} {title}) {p.GetType().Name}", ConsoleColor.Yellow);
+
+                if (p.HasChampionClass)
+                {
+                    Console.Write("  🏆 ");
+                    VisualEffects.WriteLineColored(p.ChampionClass!, ConsoleColor.Cyan);
+                }
+                if (p.HasMythicTitle)
+                {
+                    Console.Write("  🌟 ");
+                    VisualEffects.WriteLineColored($"\"{p.MythicTitle}\"", ConsoleColor.Yellow);
+                }
 
                 // Health bar
                 Console.Write("  ");
@@ -325,6 +337,7 @@ namespace Rpg_Dungeon
 
         private static void ShowInventorySlots(Character member)
         {
+            Rpg_Dungeon.Systems.MouseInput.ClearRegions();
             var slots = member.Inventory.Slots;
             Console.WriteLine($"\n=== Inventory === {member.Inventory}");
             for (int i = 0; i < slots.Count; i++)
@@ -341,7 +354,15 @@ namespace Rpg_Dungeon
                     disp += $" [{eq.Type}] (Dur {eq.Durability}/{eq.MaxDurability})";
                 }
                 if (it is Backpack bp) disp += $" [Backpack +{bp.Slots} slots]";
-                Console.WriteLine($"{i + 1}) {disp}");
+
+                int lineY = Console.CursorTop;
+                string lineText = $"{i + 1}) {disp}";
+                Console.WriteLine(lineText);
+
+                if (it != null)
+                {
+                    Rpg_Dungeon.Systems.MouseInput.RegisterItemRegion(0, lineY, lineText.Length, 1, it);
+                }
             }
         }
 
@@ -354,7 +375,9 @@ namespace Rpg_Dungeon
             Console.WriteLine("T) Toggle torch (light/extinguish)");
             Console.WriteLine("Enter) Continue");
             Console.Write("Choice: ");
-            var opt = Console.ReadLine() ?? string.Empty;
+            var opt = ReadLineWithTooltips();
+
+            Rpg_Dungeon.Systems.MouseInput.ClearRegions();
 
             if (opt.Trim().StartsWith("E", StringComparison.OrdinalIgnoreCase))
             {
@@ -585,6 +608,49 @@ namespace Rpg_Dungeon
 
             Console.WriteLine("\nPress Enter to return to main menu...");
             Console.ReadLine();
+        }
+
+        /// <summary>
+        /// Reads a line from the console while polling MouseInput for hover tooltips.
+        /// This keeps tooltip display alive while the user types their selection.
+        /// </summary>
+        private static string ReadLineWithTooltips()
+        {
+            if (!Rpg_Dungeon.Systems.MouseInput.IsSupported)
+                return Console.ReadLine() ?? string.Empty;
+
+            var input = new System.Text.StringBuilder();
+            while (true)
+            {
+                Rpg_Dungeon.Systems.MouseInput.PollAndShowTooltips();
+
+                if (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(true);
+                    if (key.Key == ConsoleKey.Enter)
+                    {
+                        Console.WriteLine();
+                        break;
+                    }
+                    else if (key.Key == ConsoleKey.Backspace)
+                    {
+                        if (input.Length > 0)
+                        {
+                            input.Remove(input.Length - 1, 1);
+                            Console.Write("\b \b");
+                        }
+                    }
+                    else if (!char.IsControl(key.KeyChar))
+                    {
+                        input.Append(key.KeyChar);
+                        Console.Write(key.KeyChar);
+                    }
+                }
+
+                System.Threading.Thread.Sleep(16);
+            }
+
+            return input.ToString();
         }
     }
 }

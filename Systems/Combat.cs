@@ -218,6 +218,9 @@ namespace Rpg_Dungeon
                     warrior.TauntDuration = 0;
                 }
             }
+
+            // Reset Mythic Title per-combat state
+            MythicTitleManager.ResetCombatState(party);
         }
 
         private static int CalculatePartyAverageLevel(List<Character> party)
@@ -249,6 +252,9 @@ namespace Rpg_Dungeon
             {
                 member.ProcessStatusEffects();
             }
+
+            // Mythic Title: The Eternal — passive regeneration each turn
+            MythicTitleManager.ApplyEternalRegen(member);
 
             // Check if stunned
             if (StatusEffectManager.IsStunned(member) || member.HasStatusEffect(StatusEffectType.Stunned))
@@ -431,7 +437,39 @@ namespace Rpg_Dungeon
             var target = SelectMobTarget(party, mob);
             if (target != null)
             {
+                // Mythic Title: The Swift — chance to dodge attacks entirely
+                if (MythicTitleManager.RollSwiftDodge(target))
+                {
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine($"\n💨 {target.Name}'s Mythic Title \"The Swift\" activates! Attack dodged entirely!");
+                    Console.ResetColor();
+                    return;
+                }
+
+                // Mythic Title: The Ironclad — intercept portion of damage for allies
+                var ironclad = MythicTitleManager.TryIroncladIntercept(target, party);
+                if (ironclad != null)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"\n🛡️ {ironclad.Name}'s Mythic Title \"The Ironclad\" activates! Intercepting for {target.Name}!");
+                    Console.ResetColor();
+                }
+
                 Attack(mob, target);
+
+                // Apply Ironclad damage redirect after the attack
+                if (ironclad != null && target.IsAlive)
+                {
+                    int absorbAmount = MythicTitleManager.GetIroncladAbsorbAmount(mob.Strength);
+                    if (absorbAmount > 0)
+                    {
+                        target.Heal(absorbAmount);
+                        ironclad.ReceiveDamage(absorbAmount);
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"   🛡️ The Ironclad absorbs {absorbAmount} damage! (+{absorbAmount} HP to {target.Name})");
+                        Console.ResetColor();
+                    }
+                }
             }
         }
 
@@ -477,6 +515,9 @@ namespace Rpg_Dungeon
             {
                 member.ProcessStatusEffects();
             }
+
+            // Mythic Title: The Eternal — passive regeneration each turn
+            MythicTitleManager.ApplyEternalRegen(member);
 
             // Check if stunned
             if (StatusEffectManager.IsStunned(member) || member.HasStatusEffect(StatusEffectType.Stunned))
@@ -551,7 +592,40 @@ namespace Rpg_Dungeon
             var target = SelectMobTargetWithAI(party, mob);
             if (target != null)
             {
-                Attack(mob, target);
+                // Mythic Title: The Swift — chance to dodge attacks entirely
+                if (MythicTitleManager.RollSwiftDodge(target))
+                {
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine($"\n💨 {target.Name}'s Mythic Title \"The Swift\" activates! Attack dodged entirely!");
+                    Console.ResetColor();
+                }
+                else
+                {
+                    // Mythic Title: The Ironclad — intercept portion of damage for allies
+                    var ironclad = MythicTitleManager.TryIroncladIntercept(target, party);
+                    if (ironclad != null)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"\n🛡️ {ironclad.Name}'s Mythic Title \"The Ironclad\" activates! Intercepting for {target.Name}!");
+                        Console.ResetColor();
+                    }
+
+                    Attack(mob, target);
+
+                    // Apply Ironclad damage redirect after the attack
+                    if (ironclad != null && target.IsAlive)
+                    {
+                        int absorbAmount = MythicTitleManager.GetIroncladAbsorbAmount(mob.Strength);
+                        if (absorbAmount > 0)
+                        {
+                            target.Heal(absorbAmount);
+                            ironclad.ReceiveDamage(absorbAmount);
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine($"   🛡️ The Ironclad absorbs {absorbAmount} damage! (+{absorbAmount} HP to {target.Name})");
+                            Console.ResetColor();
+                        }
+                    }
+                }
             }
 
             // Update actor status

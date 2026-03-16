@@ -82,6 +82,16 @@ namespace Rpg_Dungeon
                 }
             }
 
+            var mythicHeroes = party.Where(p => p.HasMythicTitle).ToList();
+            if (mythicHeroes.Any())
+            {
+                VisualEffects.WriteSuccess($"🌟 MYTHIC TITLES: {mythicHeroes.Count}\n");
+                foreach (var hero in mythicHeroes)
+                {
+                    Console.WriteLine($"   • {hero.Name} — \"{hero.MythicTitle}\"");
+                }
+            }
+
             var petOwners = party.Where(p => p.Pet != null).ToList();
             if (petOwners.Any())
             {

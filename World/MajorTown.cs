@@ -72,6 +72,7 @@ namespace Rpg_Dungeon
                 Console.WriteLine("5) Visit Bank");
                 Console.WriteLine("6) Explore Town Districts");
                 Console.WriteLine("7) Talk to NPCs 👥");
+                Console.WriteLine("8) 📜 View Town Lore");
                 Console.WriteLine("0) Leave Town");
                 Console.Write("Choice: ");
 
@@ -102,6 +103,9 @@ namespace Rpg_Dungeon
                         break;
                     case "7":
                         TalkToNPCs(party, gameState);
+                        break;
+                    case "8":
+                        WorldLore.DisplayTownLore(Name);
                         break;
                     case "0":
                         Console.WriteLine($"\nYou leave {Name}.");

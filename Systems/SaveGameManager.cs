@@ -28,6 +28,13 @@ namespace Rpg_Dungeon
                     return null;
                 }
 
+                // Migrate save file if it's from an older version
+                try
+                {
+                    Options.MigrateSaveIfNeeded(save);
+                }
+                catch { }
+
                 var party = new List<Character>();
                 foreach (var cd in save.Party)
                 {
@@ -46,6 +53,11 @@ namespace Rpg_Dungeon
                     if (!string.IsNullOrEmpty(cd.ChampionClass))
                     {
                         ch.ChampionClass = cd.ChampionClass;
+                    }
+
+                    if (!string.IsNullOrEmpty(cd.MythicTitle))
+                    {
+                        ch.MythicTitle = cd.MythicTitle;
                     }
 
                     RestorePet(ch, cd);
@@ -146,6 +158,47 @@ namespace Rpg_Dungeon
                 if (data.Inventory.ExtraSlots > 0)
                 {
                     character.Inventory.EquipBackpack(new Backpack("Loaded Backpack", data.Inventory.ExtraSlots, 0));
+                }
+
+                // Restore recycle bin entries if present
+                if (data.Inventory.RecycleBin != null)
+                {
+                    foreach (var re in data.Inventory.RecycleBin)
+                    {
+                        try
+                        {
+                            if (re?.Item == null) continue;
+                            Item item;
+                            var id = re.Item;
+                            if (id.Type == "Backpack") item = new Backpack(id.Name, id.Slots, id.Price);
+                            else if (id.Type == "Equipment")
+                            {
+                                var eqType = Enum.TryParse<EquipmentType>(id.EquipmentType, out var type) ? type : EquipmentType.Weapon;
+                                var eq = new Equipment(id.Name, eqType, id.MaxDurability, id.Price);
+                                if (id.Durability < eq.MaxDurability) eq.Damage(eq.MaxDurability - id.Durability);
+                                item = eq;
+                            }
+                            else item = new GenericItem(id.Name, id.Price);
+
+                            character.Inventory.AddToRecycle(item, re.OriginalSlot, re.RemovedAtUtc);
+                        }
+                        catch { }
+                    }
+                }
+
+                // Restore reservations into TradeManager (best-effort). We create fresh reservation ids for runtime.
+                if (data.Inventory.Reservations != null)
+                {
+                    foreach (var r in data.Inventory.Reservations)
+                    {
+                        try
+                        {
+                            var ttl = r.ExpiresAtUtc.HasValue ? (r.ExpiresAtUtc.Value - DateTime.UtcNow) : TimeSpan.FromSeconds(30);
+                            if (ttl <= TimeSpan.Zero) continue;
+                            _ = Systems.TradeManager.ReserveItem(character, r.SlotIndex, ttl);
+                        }
+                        catch { }
+                    }
                 }
             }
         }

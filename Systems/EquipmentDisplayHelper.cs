@@ -1,4 +1,5 @@
 using Night.Characters;
+using Rpg_Dungeon.Systems;
 using System;
 using System.Collections.Generic;
 
@@ -21,9 +22,12 @@ namespace Rpg_Dungeon
 
         private static void ShowEquippedSlot(string slotName, Equipment? equipment)
         {
-            Console.WriteLine($"{slotName}: {(equipment?.Name ?? "(none)")}");
+            int lineY = Console.CursorTop;
+            string lineText = $"{slotName}: {(equipment?.Name ?? "(none)")}";
+            Console.WriteLine(lineText);
             if (equipment != null)
             {
+                MouseInput.RegisterItemRegion(0, lineY, lineText.Length, 1, equipment);
                 Console.WriteLine($"  Durability: {equipment.Durability}/{equipment.MaxDurability}");
                 DisplayEquipmentBonuses(equipment);
             }
@@ -42,7 +46,10 @@ namespace Rpg_Dungeon
             {
                 torchInfo = torch.IsLit ? " 🔥" : " (unlit)";
             }
-            Console.WriteLine($"Off-Hand: {offHand.Name}");
+            int lineY = Console.CursorTop;
+            string lineText = $"Off-Hand: {offHand.Name}";
+            Console.WriteLine(lineText);
+            MouseInput.RegisterItemRegion(0, lineY, lineText.Length, 1, offHand);
             Console.WriteLine($"  Durability: {offHand.Durability}/{offHand.MaxDurability}{torchInfo}");
             DisplayEquipmentBonuses(offHand);
         }

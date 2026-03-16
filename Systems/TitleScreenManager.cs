@@ -70,6 +70,7 @@ namespace Rpg_Dungeon
                 Console.WriteLine("  7) ℹ️  About");
                 Console.WriteLine("  8) 📋 Error Logs & Diagnostics");
                 Console.WriteLine("  9) 🔄 Check for Updates");
+                Console.WriteLine(" 10) 🔁 Demo: Party Trade (reservation)");
                 Console.WriteLine("  0) 🚪 Exit Game");
                 Console.WriteLine();
                 Console.Write("Choose an option: ");
@@ -114,6 +115,11 @@ namespace Rpg_Dungeon
                         UpdateChecker.ShowUpdateCheckScreen();
                         break;
 
+                    case "10":
+                        DemoTradeBetweenParty();
+                        break;
+                        break;
+
                     case "0":
                         Console.WriteLine("\n🚪 Exiting game...");
                         Console.WriteLine("Thanks for playing! Farewell, adventurer! 👋");
@@ -133,6 +139,56 @@ namespace Rpg_Dungeon
                     Console.WriteLine();
                 }
             }
+        }
+
+        // Simple demo that creates two characters and runs a reservation -> lease timer -> commit flow
+        private static void DemoTradeBetweenParty()
+        {
+            Console.WriteLine("\n=== DEMO: PARTY TRADE RESERVATION ===");
+            var a = new Warrior("Alice");
+            var b = new Mage("Bob");
+            // give Alice an item
+            a.Inventory.AddItem(new GenericItem("Test Sword", 10));
+            a.Inventory.AddItem(new GenericItem("Test Shield", 8));
+            a.Inventory.AddGold(20);
+            b.Inventory.AddGold(5);
+
+            var party = new System.Collections.Generic.List<Night.Characters.Character> { a, b };
+
+            Console.WriteLine($"{a.Name} inventory slots: {a.Inventory.Slots.Count}");
+            Console.WriteLine("Select slot to reserve from Alice (1-based):");
+            for (int i = 0; i < a.Inventory.Slots.Count; i++) Console.WriteLine($"{i+1}) {(a.Inventory.Slots[i]==null?"(empty)":a.Inventory.Slots[i]!.Name)}");
+            var sel = Console.ReadLine() ?? string.Empty;
+            if (!int.TryParse(sel, out var idx) || idx < 1 || idx > a.Inventory.Slots.Count) { Console.WriteLine("Invalid."); return; }
+            var slot = idx - 1;
+
+            Console.WriteLine("Reserving item...");
+            var res = Systems.TradeManager.ReserveItem(a, slot, TimeSpan.FromSeconds(20));
+            if (res == null)
+            {
+                Console.WriteLine("Failed to reserve item.");
+                return;
+            }
+
+            Console.WriteLine($"Reservation created: {res.Value}. Lease: 20s");
+
+            // show lease countdown
+            for (int t = 20; t >= 0; t--)
+            {
+                Console.Write($"Lease remaining: {t}s   \r");
+                System.Threading.Thread.Sleep(1000);
+                // if reservation no longer exists, break
+                // no public API to check reservation id in TradeManager; check slot reserved on inventory
+                if (!a.Inventory.IsSlotReserved(slot))
+                {
+                    Console.WriteLine("\nReservation released or consumed.");
+                    return;
+                }
+            }
+
+            Console.WriteLine("\nLease expired (or about to). Attempting commit to Bob...");
+            var ok = Systems.TradeManager.CommitTrade(new[] { res.Value }, b);
+            if (ok) Console.WriteLine("Trade committed: item transferred to Bob."); else Console.WriteLine("Trade commit failed.");
         }
 
         private static void HandleLoadGame()

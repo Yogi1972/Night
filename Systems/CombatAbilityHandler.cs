@@ -31,7 +31,14 @@ namespace Rpg_Dungeon
 
                 string status = ability.CanUse(character) ? "✓" : "✗";
                 string cooldownText = ability.CurrentCooldown > 0 ? $" (CD: {ability.CurrentCooldown})" : "";
-                string costText = ability.ResourceCost > 0 ? $" [{ability.ResourceCost} {ability.ResourceType}]" : "";
+
+                // Show effective cost (accounts for Sage mana reduction + skill tree efficiency)
+                int displayCost = ability.ResourceCost;
+                if (ability.ResourceType == ResourceType.Mana)
+                {
+                    displayCost = character.GetEffectiveManaCost(ability.ResourceCost);
+                }
+                string costText = displayCost > 0 ? $" [{displayCost} {ability.ResourceType}]" : "";
 
                 Console.WriteLine($"  A{i + 1}. {status} {ability.Icon} {ability.Name}{costText}{cooldownText}");
 

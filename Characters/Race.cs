@@ -11,6 +11,7 @@ namespace Night.Characters
         #region Properties
 
         public string Name { get; }
+        public string Lore { get; }
 
         public int HealthBonus { get; }
         public int ManaBonus { get; }
@@ -24,7 +25,7 @@ namespace Night.Characters
 
         #region Constructor
 
-        protected Race(string name, int healthBonus = 0, int manaBonus = 0, int staminaBonus = 0, int strengthBonus = 0, int agilityBonus = 0, int intelligenceBonus = 0, int armorBonus = 0)
+        protected Race(string name, int healthBonus = 0, int manaBonus = 0, int staminaBonus = 0, int strengthBonus = 0, int agilityBonus = 0, int intelligenceBonus = 0, int armorBonus = 0, string lore = "")
         {
             Name = name;
             HealthBonus = healthBonus;
@@ -34,6 +35,7 @@ namespace Night.Characters
             AgilityBonus = agilityBonus;
             IntelligenceBonus = intelligenceBonus;
             ArmorBonus = armorBonus;
+            Lore = lore;
         }
 
         #endregion
@@ -50,6 +52,14 @@ namespace Night.Characters
             parts.Add($"Int+{IntelligenceBonus}");
             parts.Add($"AR+{ArmorBonus}");
             return $"{Name} ({string.Join(", ", parts)})";
+        }
+
+        /// <summary>
+        /// Displays the racial lore using the centralized WorldLore system.
+        /// </summary>
+        public void DisplayLore()
+        {
+            Rpg_Dungeon.WorldLore.DisplayRaceLore(Name);
         }
 
         #endregion
