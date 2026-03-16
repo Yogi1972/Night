@@ -21,7 +21,7 @@ namespace Rpg_Dungeon.Systems
         /// <summary>
         /// Current patch version number (bug fixes)
         /// </summary>
-        public const int PatchVersion = 4;
+        public const int PatchVersion = 5;
 
         /// <summary>
         /// Optional pre-release tag (e.g., "alpha", "beta", "rc1")
