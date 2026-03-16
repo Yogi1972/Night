@@ -16,7 +16,7 @@ namespace Rpg_Dungeon.Systems
         /// <summary>
         /// Current minor version number (new features)
         /// </summary>
-        public const int MinorVersion = 4;
+        public const int MinorVersion = 5;
 
         /// <summary>
         /// Current patch version number (bug fixes)
@@ -27,28 +27,28 @@ namespace Rpg_Dungeon.Systems
         /// Optional pre-release tag (e.g., "alpha", "beta", "rc1")
         /// Set to null or empty for stable releases
         /// </summary>
-        public const string PreReleaseTag = "";
+        public const string PreReleaseTag = "alpha";
 
         /// <summary>
         /// GitHub repository URL for the release version
         /// </summary>
-        public const string GitHubReleaseUrl = "https://github.com/Yogi1972/Rpg_Dungeon/releases";
+        public const string GitHubReleaseUrl = "https://github.com/Yogi1972/Night/releases";
 
         /// <summary>
         /// GitHub repository URL for the development version
         /// </summary>
-        public const string GitHubDevUrl = "https://github.com/Yogi1972/Rpg_Dungeon";
+        public const string GitHubDevUrl = "https://github.com/Yogi1972/Night";
 
         /// <summary>
         /// GitHub API URL for latest release (used for update checking)
         /// Only checks official published releases - secure and read-only for users
         /// </summary>
-        public const string GitHubVersionCheckUrl = "https://api.github.com/repos/Yogi1972/Rpg_Dungeon/releases/latest";
+        public const string GitHubVersionCheckUrl = "https://api.github.com/repos/Yogi1972/Night/releases/latest";
 
         /// <summary>
         /// Build date of this version
         /// </summary>
-        public static readonly DateTime BuildDate = new DateTime(2025, 1, 9);
+        public static readonly DateTime BuildDate = new DateTime(2026, 3, 16);
 
         /// <summary>
         /// Gets the full version string (e.g., "1.0.0" or "1.2.3-beta")
