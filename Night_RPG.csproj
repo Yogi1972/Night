@@ -1,0 +1,88 @@
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{B971A116-0C6D-D25D-A4C7-B367009773F2}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <NoStandardLibraries>false</NoStandardLibraries>
+    <AssemblyName>ConsoleApplication</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <RootNamespace>Night</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Achievements.cs" />
+    <Compile Include="Bank.cs" />
+    <Compile Include="BountyBoard.cs" />
+    <Compile Include="Camping.cs" />
+    <Compile Include="Character.cs" />
+    <Compile Include="Combat.cs" />
+    <Compile Include="Crafting.cs" />
+    <Compile Include="Dungeon.cs" />
+    <Compile Include="Gambling.cs" />
+    <Compile Include="Inventory.cs" />
+    <Compile Include="Loot.cs" />
+    <Compile Include="Merchant.cs" />
+    <Compile Include="Mobs.cs" />
+    <Compile Include="Multiplayer.cs" />
+    <Compile Include="Options.cs" />
+    <Compile Include="PetSystem.cs" />
+    <Compile Include="Playerleveling.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="QuestSystem.cs" />
+    <Compile Include="Race.cs" />
+    <Compile Include="RandomEvents.cs" />
+    <Compile Include="Shops.cs" />
+    <Compile Include="Skills.cs" />
+    <Compile Include="TimeOfDay.cs" />
+    <Compile Include="town.cs" />
+    <Compile Include="TravelManager.cs" />
+    <Compile Include="Weather.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".github\upgrades\scenarios\new-dotnet-version_2a8d04\plan.md" />
+    <None Include="Properties\PublishProfiles\FolderProfile.pubxml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Properties\PublishProfiles\FolderProfile.pubxml.user" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include=".vs\Night.slnx\copilot-chat\255b0f13\sessions\" />
+    <Folder Include=".vs\Night.slnx\v18\" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSHARP.Targets" />
+  <ProjectExtensions>
+    <VisualStudio AllowExistingFolder="true" />
+  </ProjectExtensions>
+</Project>
