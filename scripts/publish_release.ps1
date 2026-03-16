@@ -1,6 +1,11 @@
 # Publish release script for RPG Dungeon
 # Usage: powershell -ExecutionPolicy Bypass -File .\scripts\publish_release.ps1
 
+param(
+    [string]$RuntimeId = '',
+    [switch]$Standalone
+)
+
 try {
     $root = Resolve-Path -Path ".." -Relative | ForEach-Object { Join-Path (Get-Location) $_ }
 } catch {
@@ -48,25 +53,71 @@ if (git rev-parse "$tag" 2>$null) {
 Write-Host "Pushing commits and tags to origin..." -ForegroundColor Cyan
 git push origin --follow-tags
 
-# Prepare zip of repo for release asset
-$tmpDir = Join-Path $env:TEMP "rpg_release_$tag"
-if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
-New-Item -ItemType Directory -Path $tmpDir | Out-Null
+# Build and publish compiled output
+$projectFile = Get-ChildItem -Path $PSScriptRoot -Filter '*.csproj' -Recurse | Select-Object -First 1
+if (-not $projectFile) { Write-Error "Project file not found (.csproj)"; exit 1 }
 
-Write-Host "Copying files to temp dir..." -ForegroundColor Cyan
-Get-ChildItem -Path $PSScriptRoot -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -ne 'bin' -and $_.Name -ne 'obj' -and $_.Name -ne '.vs' } | ForEach-Object {
-    Copy-Item -Path $_.FullName -Destination $tmpDir -Recurse -Force
+$publishDir = Join-Path $env:TEMP "rpg_publish_$tag"
+if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
+New-Item -ItemType Directory -Path $publishDir | Out-Null
+
+Write-Host "Running dotnet publish for Release configuration..." -ForegroundColor Cyan
+
+# Determine runtime id when standalone requested
+if ($Standalone) {
+    if (-not $RuntimeId) { $RuntimeId = 'win-x64' }
+    Write-Host "Publishing standalone self-contained build for runtime: $RuntimeId" -ForegroundColor Cyan
+    dotnet publish $projectFile.FullName -c Release -r $RuntimeId --self-contained true -o $publishDir
+} else {
+    dotnet publish $projectFile.FullName -c Release -o $publishDir
 }
+
+if ($LASTEXITCODE -ne 0) { Write-Error "dotnet publish failed (exit $LASTEXITCODE)"; exit 1 }
 
 $zipPath = Join-Path $env:TEMP "rpg_release_${tag}.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-Write-Host "Creating zip package: $zipPath" -ForegroundColor Cyan
-Compress-Archive -Path (Join-Path $tmpDir '*') -DestinationPath $zipPath -Force
+Write-Host "Creating zip package from published output: $zipPath" -ForegroundColor Cyan
+Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zipPath -Force
+
+# Generate SHA256 checksum file for the zip and the main exe (if present)
+$shaPath = "$zipPath.sha256.txt"
+try {
+    Write-Host "Generating SHA256 checksum for zip..." -ForegroundColor Cyan
+    $sha = Get-FileHash -Path $zipPath -Algorithm SHA256
+    $shaText = "$($sha.Hash)  $(Split-Path -Path $zipPath -Leaf)"
+    Set-Content -Path $shaPath -Value $shaText -Encoding UTF8
+    Write-Host "Checksum written to: $shaPath" -ForegroundColor Green
+} catch {
+    Write-Host "Failed to generate zip checksum: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+# If an executable exists in the published output, generate a separate checksum for it
+$exePath = Get-ChildItem -Path $publishDir -Filter '*.exe' -Recurse | Select-Object -First 1
+$exeShaPath = $null
+if ($exePath) {
+    try {
+        $exeShaPath = "$($exePath.FullName).sha256.txt"
+        Write-Host "Generating SHA256 for executable: $($exePath.Name)" -ForegroundColor Cyan
+        $esha = Get-FileHash -Path $exePath.FullName -Algorithm SHA256
+        $eshaText = "$($esha.Hash)  $($exePath.Name)"
+        Set-Content -Path $exeShaPath -Value $eshaText -Encoding UTF8
+        Write-Host "Executable checksum written to: $exeShaPath" -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to generate exe checksum: $($_.Exception.Message)" -ForegroundColor Yellow
+        $exeShaPath = $null
+    }
+}
 
 # Use gh CLI to create release if available
 if (Get-Command gh -ErrorAction SilentlyContinue) {
     Write-Host "Creating GitHub release $tag..." -ForegroundColor Cyan
-    gh release create $tag $zipPath --title $tag --notes "Automated release $tag"
+    # Upload zip, zip checksum, and exe+checksum (if present)
+    $assets = @($zipPath)
+    if (Test-Path $shaPath) { $assets += $shaPath }
+    if ($exePath) { $assets += $exePath.FullName }
+    if ($exeShaPath -and (Test-Path $exeShaPath)) { $assets += $exeShaPath }
+
+    gh release create $tag @assets --title $tag --notes "Automated release $tag"
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Release $tag created and asset uploaded." -ForegroundColor Green
     } else {
@@ -82,7 +133,7 @@ if (Get-Command gh -ErrorAction SilentlyContinue) {
 
 Write-Host "Done." -ForegroundColor Green
 
-# Cleanup temp dir
-Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+# Cleanup temp publish directory
+if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force -ErrorAction SilentlyContinue }
 
 exit 0

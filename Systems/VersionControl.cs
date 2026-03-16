@@ -82,6 +82,12 @@ namespace Rpg_Dungeon.Systems
         public const string DotNetVersion = ".NET 10";
 
         /// <summary>
+        /// If true, the client will auto-apply updates silently without prompting the user.
+        /// This compile-time constant remains for legacy fallback; runtime setting in `user_settings.json` (via SettingsManager) will be preferred when available.
+        /// </summary>
+        public const bool AutoUpdateSilent = false;
+
+        /// <summary>
         /// Gets the C# language version used
         /// </summary>
         public const string CSharpVersion = "C# 14.0";

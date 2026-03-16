@@ -466,44 +466,63 @@ namespace Rpg_Dungeon.Systems
                 }
                 Console.WriteLine();
 
-                // Prompt for confirmation before proceeding
-                Console.WriteLine("  ⚠️  About to install an update. This will replace the current installation.");
-                Console.WriteLine("  Press 'Y' to continue or any other key to cancel...");
-                var confirmKey = Console.ReadKey(true);
-                if (confirmKey.KeyChar != 'Y' && confirmKey.KeyChar != 'y')
-                {
-                    Console.WriteLine("  ❌ Update cancelled by user.");
-                    return;
-                }
-
-                // Offer to create a full backup of the current installation before proceeding
-                Console.WriteLine();
-                Console.WriteLine("  💾 Create a full backup of the current installation before updating? (Y/n)");
-                var backupChoice = Console.ReadKey(true);
-                if (backupChoice.KeyChar == 'N' || backupChoice.KeyChar == 'n')
-                {
-                    Console.WriteLine("  ⚠️  Proceeding without a full backup.");
-                }
-                else
+                // If configured to auto-update silently, read runtime setting and skip prompts/backups if enabled
+                bool autoSilent = false;
+                try { autoSilent = SettingsManager.Load().AutoUpdateSilent; } catch { autoSilent = VersionControl.AutoUpdateSilent; }
+                if (autoSilent)
                 {
                     try
                     {
                         var currentDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
                         var backupZip = Path.Combine(Path.GetTempPath(), $"rpg_backup_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
-                        Console.WriteLine($"  💾 Creating backup to: {backupZip}");
                         ZipFile.CreateFromDirectory(currentDir, backupZip, CompressionLevel.Fastest, false);
-                        Console.WriteLine("  ✅ Full backup created.");
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        Console.WriteLine($"  ❌ Backup failed: {ex.Message}");
-                        ErrorLogger.LogWarning($"Full backup failed: {ex.Message}", "Updater backup");
-                        Console.WriteLine("  Press 'Y' to continue without backup or any other key to cancel...");
-                        var bk = Console.ReadKey(true);
-                        if (bk.KeyChar != 'Y' && bk.KeyChar != 'y')
+                        // ignore backup failures in silent mode
+                    }
+                }
+                else
+                {
+                    // Prompt for confirmation before proceeding
+                    Console.WriteLine("  ⚠️  About to install an update. This will replace the current installation.");
+                    Console.WriteLine("  Press 'Y' to continue or any other key to cancel...");
+                    var confirmKey = Console.ReadKey(true);
+                    if (confirmKey.KeyChar != 'Y' && confirmKey.KeyChar != 'y')
+                    {
+                        Console.WriteLine("  ❌ Update cancelled by user.");
+                        return;
+                    }
+
+                    // Offer to create a full backup of the current installation before proceeding
+                    Console.WriteLine();
+                    Console.WriteLine("  💾 Create a full backup of the current installation before updating? (Y/n)");
+                    var backupChoice = Console.ReadKey(true);
+                    if (backupChoice.KeyChar == 'N' || backupChoice.KeyChar == 'n')
+                    {
+                        Console.WriteLine("  ⚠️  Proceeding without a full backup.");
+                    }
+                    else
+                    {
+                        try
                         {
-                            Console.WriteLine("  ❌ Update cancelled by user due to backup failure.");
-                            return;
+                            var currentDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+                            var backupZip = Path.Combine(Path.GetTempPath(), $"rpg_backup_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+                            Console.WriteLine($"  💾 Creating backup to: {backupZip}");
+                            ZipFile.CreateFromDirectory(currentDir, backupZip, CompressionLevel.Fastest, false);
+                            Console.WriteLine("  ✅ Full backup created.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"  ❌ Backup failed: {ex.Message}");
+                            ErrorLogger.LogWarning($"Full backup failed: {ex.Message}", "Updater backup");
+                            Console.WriteLine("  Press 'Y' to continue without backup or any other key to cancel...");
+                            var bk = Console.ReadKey(true);
+                            if (bk.KeyChar != 'Y' && bk.KeyChar != 'y')
+                            {
+                                Console.WriteLine("  ❌ Update cancelled by user due to backup failure.");
+                                return;
+                            }
                         }
                     }
                 }
@@ -666,6 +685,9 @@ namespace Rpg_Dungeon.Systems
             string scriptPath = Path.Combine(Path.GetTempPath(), "rpg_updater.ps1");
 
             // Build script line by line to avoid string literal issues
+            var escExe = currentExe.Replace("'", "''");
+            var tempZipRel = Path.Combine(Path.GetTempPath(), "rpg_update.zip").Replace("'", "''");
+            // We'll use placeholders inside the script lines and replace them after joining to avoid C# interpolation/escaping issues
             var scriptLines = new System.Collections.Generic.List<string>
             {
                 "$logPath = Join-Path $env:TEMP 'rpg_updater.log'",
@@ -693,16 +715,21 @@ namespace Rpg_Dungeon.Systems
                 "Write-Host ''",
                 "",
                 "# Copy new files",
-                $"$sourceDir = '{extractPath}'",
-                $"$targetDir = '{currentDir}'",
+                "$sourceDir = '{SOURCE}'",
+                "$targetDir = '{TARGET}'",
                 "",
                 "try {",
-                "    # Backup old exe",
-                "    $oldExe = Join-Path $targetDir 'Night.exe'",
-                "    $backupExe = Join-Path $targetDir 'Night.exe.backup'",
-                "    if (Test-Path $oldExe) {",
-                "        Copy-Item $oldExe $backupExe -Force",
-                "    }",
+                "    # Create timestamped backup folder and copy user-critical files",
+                "    $backupRoot = Join-Path $targetDir ('.backup_' + ([DateTime]::UtcNow.ToString('yyyyMMddHHmmss')))",
+                "    try {",
+                "        if (-not (Test-Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null }",
+                "        $oldExe = Join-Path $targetDir 'Night.exe'",
+                "        if (Test-Path $oldExe) { Copy-Item $oldExe (Join-Path $backupRoot 'Night.exe') -Force }",
+                "        $userSettings = Join-Path $targetDir 'user_settings.json'",
+                "        if (Test-Path $userSettings) { Copy-Item $userSettings (Join-Path $backupRoot 'user_settings.json') -Force }",
+                "        $saves = Get-ChildItem -Path $targetDir -Filter 'save_*.json' -ErrorAction SilentlyContinue",
+                "        if ($saves) { foreach ($s in $saves) { Copy-Item $s.FullName (Join-Path $backupRoot $s.Name) -Force } }",
+                "    } catch { }",
                 "",
                 "    # Copy all files",
                 "    Get-ChildItem -Path $sourceDir -Recurse | ForEach-Object {",
@@ -726,11 +753,11 @@ namespace Rpg_Dungeon.Systems
                 "",
                 "    # Restart game",
                 $"    Start-Process -FilePath '{currentExe.Replace("'", "''")}' -WorkingDirectory $targetDir",
-                "    # Cleanup",
+                "    # Cleanup installer temporary files (do not remove backups)",
                 "    Start-Sleep -Seconds 2",
                 "    Remove-Item -Path $sourceDir -Recurse -Force -ErrorAction SilentlyContinue",
                 $"    Remove-Item -Path '{Path.Combine(Path.GetTempPath(), "rpg_update.zip")}' -Force -ErrorAction SilentlyContinue",
-                "    Remove-Item -Path $backupExe -Force -ErrorAction SilentlyContinue",
+                "    # Remove the updater script itself",
                 "    Remove-Item -Path $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue",
                 "}",
                 "catch {",
@@ -740,13 +767,21 @@ namespace Rpg_Dungeon.Systems
                 "    Write-Host ''",
                 "    Write-Host 'Restoring backup...' -ForegroundColor Yellow",
                 "",
-                "    # Restore backup",
-                "    $oldExe = Join-Path $targetDir 'Night.exe'",
-                "    $backupExe = Join-Path $targetDir 'Night.exe.backup'",
-                "    if (Test-Path $backupExe) {",
-                "        Copy-Item $backupExe $oldExe -Force",
-                "        Remove-Item $backupExe -Force",
-                "    }",
+                "    # Restore backup from the most recent timestamped backup folder (if present)",
+                "    try {",
+                "        $backupFolders = Get-ChildItem -Path $targetDir -Directory -Filter '.backup_*' -ErrorAction SilentlyContinue | Sort-Object Name -Descending",
+                "        if ($backupFolders -and $backupFolders.Length -gt 0) {",
+                "            $latest = $backupFolders[0].FullName",
+                "            Write-Host \"  Restoring files from backup: $latest\" -ForegroundColor Yellow",
+                "            Get-ChildItem -Path $latest -Recurse | ForEach-Object {",
+                "                $rel = $_.FullName.Substring($latest.Length).TrimStart('\\')",
+                "                $dest = Join-Path $targetDir $rel",
+                "                Copy-Item $_.FullName $dest -Force",
+                "            }",
+                "            # Optionally remove the backup folder after restore",
+                "            Remove-Item -Path $latest -Recurse -Force -ErrorAction SilentlyContinue",
+                "        }",
+                "    } catch { }",
                 "",
                 "    Write-Host 'Restarting game...' -ForegroundColor Cyan",
                 $"    Start-Process -FilePath '{currentExe.Replace("'", "''")}' -WorkingDirectory $targetDir",
@@ -756,6 +791,11 @@ namespace Rpg_Dungeon.Systems
             };
 
             string script = string.Join(Environment.NewLine, scriptLines);
+            // Replace placeholders with safe escaped values
+            script = script.Replace("{EXE}", escExe);
+            script = script.Replace("{TMPZIP}", tempZipRel);
+            script = script.Replace("{SOURCE}", extractPath.Replace("'", "''"));
+            script = script.Replace("{TARGET}", currentDir.Replace("'", "''"));
             File.WriteAllText(scriptPath, script);
             return scriptPath;
         }
@@ -779,5 +819,5 @@ namespace Rpg_Dungeon.Systems
             var contents = File.ReadAllText(scriptPath);
             return contents;
         }
-            }
-        }
+    }
+}
