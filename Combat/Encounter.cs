@@ -349,6 +349,19 @@ namespace Rpg_Dungeon
                     {
                         mobHealthTracker[targetMob] = 0;
                         Console.WriteLine($"✓ {targetMob.Name} defeated!");
+
+                        // If a goblin was defeated, pause and clear the screen before continuing
+                        try
+                        {
+                            if (targetMob.Name != null && targetMob.Name.IndexOf("goblin", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                Console.WriteLine();
+                                Console.WriteLine("Press any key to continue...");
+                                Console.ReadKey(true);
+                                Console.Clear();
+                            }
+                        }
+                        catch { }
                     }
                     else
                     {
@@ -413,7 +426,15 @@ namespace Rpg_Dungeon
             foreach (var member in party)
             {
                 string status = member.IsAlive ? "✓" : "✗";
-                Console.WriteLine($"   {status} {member.Name} (Lv {member.Level}) - HP: {member.Health}/{member.GetTotalMaxHP()}");
+                Console.Write($"   {status} {member.Name} (Lv {member.Level}) - ");
+                try
+                {
+                    VisualEffects.DrawHealthBarLine(member.Health, member.GetTotalMaxHP(), 20);
+                }
+                catch
+                {
+                    Console.WriteLine($"HP: {member.Health}/{member.GetTotalMaxHP()}");
+                }
             }
 
             Console.WriteLine("\n⚔️  Enemies:");
@@ -422,7 +443,17 @@ namespace Rpg_Dungeon
                 var enemy = Enemies[i];
                 int hp = mobHealthTracker[enemy];
                 string status = hp > 0 ? "⚡" : "💀";
-                Console.WriteLine($"   {status} {i + 1}. {enemy.Name} (Lv {enemy.Level}) - HP: {hp}/{enemy.Health}");
+                Console.Write($"   {status} {i + 1}. {enemy.Name} (Lv {enemy.Level}) - ");
+                try
+                {
+                    // Force background-colored bar for goblins which may be white in some terminals
+                    bool isGoblin = enemy.Name != null && enemy.Name.IndexOf("goblin", StringComparison.OrdinalIgnoreCase) >= 0;
+                    VisualEffects.DrawHealthBarLine(hp, enemy.Health, 20, isGoblin);
+                }
+                catch
+                {
+                    Console.WriteLine($"HP: {hp}/{enemy.Health}");
+                }
             }
             Console.WriteLine();
         }

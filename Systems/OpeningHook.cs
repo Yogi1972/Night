@@ -273,6 +273,8 @@ namespace Rpg_Dungeon
 
             Console.WriteLine("Press any key to begin your adventure...");
             Console.ReadKey(true);
+            // Clear screen and return to title/menu
+            try { Console.Clear(); } catch { Console.WriteLine("\n\n"); }
         }
 
         public static bool ShouldShowOpening()

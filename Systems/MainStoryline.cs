@@ -138,28 +138,43 @@ namespace Rpg_Dungeon
 
             Console.Clear();
             Console.WriteLine("\n╔════════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║                      THE CALL TO ADVENTURE                        ║");
+            Console.WriteLine("║                     ✦  A WHISPER IN THE STORM  ✦                  ║");
             Console.WriteLine("╚════════════════════════════════════════════════════════════════════╝");
             Console.WriteLine();
-            Console.WriteLine("The realm is in peril. Darkness spreads from an unknown source,");
-            Console.WriteLine("corrupting the land and its creatures. Strange occurrences plague");
-            Console.WriteLine("the towns and villages across the world.");
+
+            // Short cinematic intro with pacing
+            Console.WriteLine("Night falls early this season. A cold wind walks the empty streets, carrying the scent of smoke and old magic.");
+            System.Threading.Thread.Sleep(700);
+            Console.WriteLine("Farmers whisper of fields gone black at dawn. Soldiers return with empty harvests and haunted eyes.");
+            System.Threading.Thread.Sleep(700);
+            Console.WriteLine("Caravans pass with fewer wagons; priests speak in hushed tones of a darkness that devours light.");
+            System.Threading.Thread.Sleep(900);
+
             Console.WriteLine();
-            Console.WriteLine("Five major cities hold pieces of the puzzle:");
+            Console.WriteLine("As rumors swell into dread, five cities stand between the realm and collapse:");
+            System.Threading.Thread.Sleep(500);
             Console.WriteLine();
-            Console.WriteLine("  🏰 Havenbrook - The trade hub where rumors gather");
-            Console.WriteLine("  ⚒️  Ironforge Citadel - The mountain fortress of master craftsmen");
-            Console.WriteLine("  🔮 Mysthaven - The mystical port city of arcane knowledge");
-            Console.WriteLine("  ☀️  Sunspire - The desert city guarding ancient secrets");
-            Console.WriteLine("  🌑 Shadowkeep - The dark citadel where truth lies hidden");
+            Console.WriteLine("  🏰 Havenbrook  — A crossroads where gossip becomes legend.");
+            System.Threading.Thread.Sleep(300);
+            Console.WriteLine("  ⚒️  Ironforge  — Forges ring out, but the fires seem dimmer.");
+            System.Threading.Thread.Sleep(300);
+            Console.WriteLine("  🔮 Mysthaven  — Scholars and sorcerers search for answers in old tomes.");
+            System.Threading.Thread.Sleep(300);
+            Console.WriteLine("  ☀️  Sunspire   — Ancient deserts guard forgotten rites and bones.");
+            System.Threading.Thread.Sleep(300);
+            Console.WriteLine("  🌑 Shadowkeep — A citadel of shadows — where truths are buried deep.");
             Console.WriteLine();
-            Console.WriteLine("Your journey will take you to all corners of the realm.");
-            Console.WriteLine("Only by visiting each city and uncovering their secrets");
-            Console.WriteLine("can you hope to stop the coming darkness.");
+            System.Threading.Thread.Sleep(700);
+
+            Console.WriteLine("You are called not by fate alone, but by a letter from Elder Morris — a plea for aid tucked into an old oak's knot.");
+            System.Threading.Thread.Sleep(700);
+            Console.WriteLine("Step lightly, gather allies, and listen to the land. Every clue, every conversation, may turn the tide.");
             Console.WriteLine();
-            Console.WriteLine("Your adventure begins in Havenbrook...");
-            Console.WriteLine("\nPress Enter to begin your quest...");
-            Console.ReadLine();
+
+            Console.WriteLine("Your journey will begin in Havenbrook. Prepare your party, sharpen your wits, and keep your courage close.");
+            Console.WriteLine("\nPress any key to continue...");
+            Console.ReadKey(true);
+            Console.Clear();
 
             _hasSeenIntro = true;
         }
@@ -250,8 +265,9 @@ namespace Rpg_Dungeon
                 DisplayEnding();
             }
 
-            Console.WriteLine("\n\nPress Enter to continue...");
-            Console.ReadLine();
+            Console.WriteLine("\n\nPress any key to continue...");
+            Console.ReadKey(true);
+            Console.Clear();
         }
 
         private string GetChapterCompletionNarrative(int chapter)
@@ -312,8 +328,9 @@ namespace Rpg_Dungeon
                 }
             }
 
-            Console.WriteLine("\n\nPress Enter to continue...");
-            Console.ReadLine();
+            Console.WriteLine("\n\nPress any key to continue...");
+            Console.ReadKey(true);
+            Console.Clear();
         }
 
         public bool HasSeenIntro() => _hasSeenIntro;
