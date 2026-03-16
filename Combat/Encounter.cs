@@ -16,6 +16,7 @@ namespace Rpg_Dungeon
         Boss         // Epic boss fight
     }
 
+
     #endregion
 
     #region Encounter Class
@@ -39,13 +40,29 @@ namespace Rpg_Dungeon
         private int _partyAverageLevel;
         private int _partyTotalPower;
 
+        // Tunable heuristic weights
+        private const double WeightLevel = 18.0; // influence of level
+        private const double WeightHP = 0.22;    // influence of HP
+        private const double WeightStat = 2.2;   // influence of each stat
+        private const double WeightArmor = 3.5;  // influence of armor rating
+
+        // Difficulty multipliers - tuned for playtesting
+        private static readonly Dictionary<EncounterDifficulty, double> DifficultyMultiplier = new()
+        {
+            { EncounterDifficulty.Easy, 0.65 },
+            { EncounterDifficulty.Normal, 1.0 },
+            { EncounterDifficulty.Hard, 1.6 },
+            { EncounterDifficulty.Elite, 2.4 },
+            { EncounterDifficulty.Boss, 3.5 }
+        };
+
         #endregion
 
         #region Constructor
 
-        public Encounter()
+        public Encounter(Random? rng = null)
         {
-            _rng = new Random();
+            _rng = rng ?? new Random();
             Enemies = new List<Mob>();
             Difficulty = EncounterDifficulty.Normal;
             EncounterDescription = string.Empty;
@@ -72,12 +89,26 @@ namespace Rpg_Dungeon
             int mobCount = CalculateMobCount(difficulty);
             int mobLevel = CalculateMobLevel(difficulty);
 
-            // Generate the mobs
+            // Generate the initial set of mobs (use injected RNG)
             for (int i = 0; i < mobCount; i++)
             {
-                var mob = Mobs.GetRandomMobForParty(party, mobLevel);
+                var mob = Mobs.GetRandomMobForParty(party, mobLevel, _rng);
                 Enemies.Add(mob);
             }
+
+            // Balance enemies to approximate party total power based on difficulty
+            // Determine multiplier from tuned table
+            double difficultyMultiplier = DifficultyMultiplier.ContainsKey(difficulty) ? DifficultyMultiplier[difficulty] : 1.0;
+
+            int targetEnemyPower = Math.Max(1, (int)Math.Round(_partyTotalPower * difficultyMultiplier));
+
+            Console.WriteLine($"   [Balance] Party power: {_partyTotalPower}, target enemy power: {targetEnemyPower} (multiplier {difficultyMultiplier})");
+            int beforePower = Enemies.Sum(e => EstimateMobPower(e));
+            Console.WriteLine($"   [Balance] Initial enemy power: {beforePower}");
+            BalanceEnemies(party, mobLevel, targetEnemyPower);
+            int afterPower = Enemies.Sum(e => EstimateMobPower(e));
+            Console.WriteLine($"   [Balance] Final enemy power: {afterPower}");
+            Console.WriteLine($"   [Balance] Adjusted by: {afterPower - beforePower}");
 
             EncounterDescription = GenerateDescription();
 
@@ -126,7 +157,7 @@ namespace Rpg_Dungeon
 
             // Boss is 2-3 levels higher than party average
             int bossLevel = _partyAverageLevel + _rng.Next(2, 4);
-            var boss = Mobs.GetRandomMobForParty(party, bossLevel);
+            var boss = Mobs.GetRandomMobForParty(party, bossLevel, _rng);
 
             // Add minions based on party size
             int minionCount = Math.Max(1, _partySize / 2);
@@ -135,12 +166,20 @@ namespace Rpg_Dungeon
             Enemies.Add(boss);
             for (int i = 0; i < minionCount; i++)
             {
-                var minion = Mobs.GetRandomMobForParty(party, minionLevel);
+                var minion = Mobs.GetRandomMobForParty(party, minionLevel, _rng);
                 Enemies.Add(minion);
             }
 
             EncounterDescription = $"⚠️  BOSS ENCOUNTER: {boss.Name} appears with {minionCount} minion(s)!";
             VisualEffects.ShowBossEncounterIntro(boss.Name);
+            // Balance boss encounter: preserve the boss (first enemy) while balancing minions
+            int beforePower = Enemies.Sum(e => EstimateMobPower(e));
+            int targetEnemyPower = Math.Max(1, (int)Math.Round(_partyTotalPower * DifficultyMultiplier[EncounterDifficulty.Boss]));
+            Console.WriteLine($"   [Balance] Boss encounter initial power: {beforePower}, target: {targetEnemyPower}");
+            BalanceEnemies(party, minionLevel, targetEnemyPower, preserveFirstEnemy: true);
+            int afterPower = Enemies.Sum(e => EstimateMobPower(e));
+            Console.WriteLine($"   [Balance] Boss encounter final power: {afterPower} (adjust {afterPower - beforePower})");
+
             Console.WriteLine($"\n{EncounterDescription}");
         }
 
@@ -163,6 +202,7 @@ namespace Rpg_Dungeon
                     aliveCount++;
                 }
             }
+
             _partyAverageLevel = aliveCount > 0 ? totalLevel / aliveCount : 1;
 
             // Calculate party power (level + stats)
@@ -260,6 +300,91 @@ namespace Rpg_Dungeon
             }
 
             return Math.Max(1, baseLevel);
+        }
+
+        // Estimate a simple power value for a mob (level + stats weight)
+        private int EstimateMobPower(Mob? m)
+        {
+            if (m == null) return 0;
+            // Tuned heuristic using constants
+            double power = 0.0;
+            power += m.Level * WeightLevel;
+            power += m.Health * WeightHP;
+            power += (m.Strength + m.Agility + m.Intelligence) * WeightStat;
+            power += m.ArmorRating * WeightArmor;
+            return Math.Max(1, (int)Math.Round(power));
+        }
+
+        // Adjust the enemy list to better match a target total power
+        private void BalanceEnemies(List<Character> party, int mobLevel, int targetPower, bool preserveFirstEnemy = false)
+        {
+            if (targetPower <= 0) return;
+
+            int currentPower = Enemies.Sum(e => EstimateMobPower(e));
+
+            if (Math.Abs(currentPower - targetPower) <= Math.Max(5, targetPower / 10)) return;
+
+            int attempts = 0;
+            while (currentPower < targetPower && attempts < 50)
+            {
+                if (_rng.Next(100) < 60 || Enemies.Count == 0)
+                {
+                    var newMob = Mobs.GetRandomMobForParty(party, mobLevel + _rng.Next(0, 2), _rng);
+                    Enemies.Add(newMob);
+                    currentPower += EstimateMobPower(newMob);
+                    Console.WriteLine($"   [Balance] Added mob: {newMob.Name} (Lv {newMob.Level}) -> power {EstimateMobPower(newMob)}");
+                }
+                else
+                {
+                    int idx = _rng.Next(Enemies.Count);
+                    var scaled = Enemies[idx].ScaleToLevel(Enemies[idx].Level + 1);
+                    Console.WriteLine($"   [Balance] Scaled up: {Enemies[idx].Name} from L{Enemies[idx].Level} to L{scaled.Level}");
+                    currentPower -= EstimateMobPower(Enemies[idx]);
+                    Enemies[idx] = scaled;
+                    currentPower += EstimateMobPower(scaled);
+                }
+                attempts++;
+            }
+
+            attempts = 0;
+            while (currentPower > targetPower && attempts < 50 && Enemies.Count > 1)
+            {
+                if (_rng.Next(100) < 60 && Enemies.Count > 1)
+                {
+                    Mob? weakest = null;
+                    if (preserveFirstEnemy && Enemies.Count > 1)
+                    {
+                        weakest = Enemies.Where((e, i) => i != 0).OrderBy(e => EstimateMobPower(e)).FirstOrDefault();
+                        if (weakest == null)
+                        {
+                            // nothing safe to remove, break out
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        weakest = Enemies.OrderBy(e => EstimateMobPower(e)).First();
+                    }
+                    currentPower -= EstimateMobPower(weakest);
+                    Enemies.Remove(weakest);
+                    Console.WriteLine($"   [Balance] Removed weakest: {weakest.Name} (power {EstimateMobPower(weakest)})");
+                }
+                else
+                {
+                    int idx = _rng.Next(Enemies.Count);
+                    if (preserveFirstEnemy && idx == 0 && Enemies.Count > 1)
+                    {
+                        idx = 1; // avoid scaling down the preserved boss
+                    }
+                    var lvl = Math.Max(1, Enemies[idx].Level - 1);
+                    var scaled = Enemies[idx].ScaleToLevel(lvl);
+                    Console.WriteLine($"   [Balance] Scaled down: {Enemies[idx].Name} from L{Enemies[idx].Level} to L{lvl}");
+                    currentPower -= EstimateMobPower(Enemies[idx]);
+                    Enemies[idx] = scaled;
+                    currentPower += EstimateMobPower(scaled);
+                }
+                attempts++;
+            }
         }
 
         private string GenerateDescription()

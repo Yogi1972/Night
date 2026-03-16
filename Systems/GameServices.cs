@@ -7,5 +7,7 @@ namespace Rpg_Dungeon.Systems
         // Shared game-wide service instances
         public static NPCManager? NPCManager { get; set; }
         public static Journal? Journal { get; set; }
+        // Optional hex map service for pathfinding/travel
+        public static FogOfWarMap? FogOfWarMap { get; set; }
     }
 }

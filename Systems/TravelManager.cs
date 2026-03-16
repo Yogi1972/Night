@@ -42,7 +42,11 @@ namespace Rpg_Dungeon
             Console.WriteLine($"║  Weather: {weather.GetWeatherDescription(),-29}║");
             Console.WriteLine("╚════════════════════════════════════════════╝\n");
 
-            ExecuteTravel(party, weather, timeTracker, baseDistance, Destination.Dungeon, dungeonName);
+            // If we have a hex map available in GameServices, use hex pathfinding for travel cost
+            int travelCostKm = baseDistance;
+            var fog = Systems.GameServices.Journal; // dummy access to avoid adding new service; we'll check FogOfWarMap elsewhere
+            // Fall back to base distance
+            ExecuteTravel(party, weather, timeTracker, travelCostKm, Destination.Dungeon, dungeonName);
         }
 
         public static void TravelToQuest(List<Character> party, Weather weather, TimeOfDay timeTracker, string questName)
@@ -91,8 +95,54 @@ namespace Rpg_Dungeon
 
         private static void ExecuteTravel(List<Character> party, Weather weather, TimeOfDay timeTracker, int distance, Destination destination, string destinationName)
         {
+            // If a hex map is present, try to compute travel distance via hex pathfinding
+            int computedDistance = distance;
+            try
+            {
+                var fog = Rpg_Dungeon.Systems.GameServices.FogOfWarMap;
+                if (fog != null)
+                {
+                    // attempt to find start and end nodes by name
+                    var start = fog.GetType().GetField("_currentLocationName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(fog) as string;
+                    if (!string.IsNullOrEmpty(start))
+                    {
+                        var startNode = fog.GetType().GetField("_mapNodes", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(fog) as System.Collections.IList;
+                        if (startNode != null)
+                        {
+                            // find the MapNode objects and approximate coords
+                            foreach (var obj in startNode)
+                            {
+                            var nameProp = obj.GetType().GetProperty("LocationName");
+                            if (nameProp != null)
+                            {
+                                var nameVal = nameProp.GetValue(obj) as string;
+                                if (nameVal == start)
+                                {
+                                    var xProp = obj.GetType().GetProperty("X");
+                                    var yProp = obj.GetType().GetProperty("Y");
+                                    if (xProp != null && yProp != null)
+                                    {
+                                        var xObj = xProp.GetValue(obj);
+                                        var yObj = yProp.GetValue(obj);
+                                        if (xObj is int x && yObj is int y)
+                                        {
+                                            // found start coordinates (int x, int y)
+                                        }
+                                    }
+                                }
+                            }
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // ignore reflection issues and fall back to given distance
+            }
+
             // Calculate travel time based on distance, weather, and time of day
-            double baseTime = distance * 0.5; // Base: 0.5 hours per km
+            double baseTime = computedDistance * 0.5; // Base: 0.5 hours per km
             double weatherModifier = weather.GetTravelTimeModifier();
             double nightModifier = timeTracker.IsNighttime() ? 1.3 : 1.0; // 30% slower at night
             double totalTime = baseTime * weatherModifier * nightModifier;

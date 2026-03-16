@@ -17,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include=".github\workflows\ci.yml" />
+    <None Include=".github\workflows\release.yml" />
     <None Include="Rpg_Dungeon.Tests\Rpg_Dungeon.Tests.csproj" />
   </ItemGroup>
 </Project>

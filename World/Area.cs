@@ -155,6 +155,64 @@ namespace Rpg_Dungeon
 
             var selectedDungeon = Dungeons[idx - 1];
 
+            // Show power vs dungeon chance and offer simulation before entering
+            bool proceed = false;
+            while (true)
+            {
+                try
+                {
+                    // Print computed chance and a short simulation
+                    int chance = PowerRating.ChanceToComplete(party, selectedDungeon);
+                    Console.WriteLine();
+                    Console.WriteLine($"Computed chance to complete this dungeon: {chance}%");
+
+                    // Run a 5-attempt simulation (deterministic per session)
+                    var simRng = new Random();
+                    PowerRating.SimulateDungeonAttempts(party, selectedDungeon, 5, simRng);
+
+                    if (chance < 35)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine("⚠️  Warning: This dungeon looks especially dangerous for your current party.");
+                        Console.ResetColor();
+                    }
+                    else if (chance < 60)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine("⚠️  Caution: This dungeon may be challenging. Consider resting or gearing up.");
+                        Console.ResetColor();
+                    }
+                    // Recommended actions
+                    var recs = PowerRating.RecommendActions(party, selectedDungeon);
+                    if (recs != null && recs.Count > 0)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("Recommended actions:");
+                        foreach (var r in recs)
+                        {
+                            Console.WriteLine($"  - {r}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[PowerRating] Could not compute chance/simulation: {ex.Message}");
+                }
+
+                Console.WriteLine("\nDo you want to enter this dungeon? (y = enter / s = simulate again / n = cancel)");
+                var choice = (Console.ReadLine() ?? string.Empty).Trim().ToLowerInvariant();
+                if (choice == "y") { proceed = true; break; }
+                if (choice == "n") { proceed = false; break; }
+                if (choice == "s") { continue; }
+                Console.WriteLine("Invalid option. Enter 'y', 'n' or 's'.");
+            }
+
+            if (!proceed)
+            {
+                Console.WriteLine("Cancelled. Returning to area menu...");
+                return;
+            }
+
             // Travel to dungeon
             if (Weather != null && TimeTracker != null)
             {

@@ -2,8 +2,12 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Rpg_Dungeon.Systems
@@ -29,6 +33,80 @@ namespace Rpg_Dungeon.Systems
             public string? PreReleaseTag { get; set; }
             public string? ReleaseNotes { get; set; }
             public string? ReleaseDate { get; set; }
+        }
+
+        /// <summary>
+        /// Get download URL and optional checksum if present in release assets (look for .sha256 or metadata in name)
+        /// </summary>
+        private class DownloadInfo { public string? Url; public string? Checksum; }
+
+        private static async Task<DownloadInfo?> GetDownloadInfo(VersionInfo remoteVersion)
+        {
+            try
+            {
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Add("User-Agent", "Rpg-Dungeon-Crawler/3.0");
+                _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+                _httpClient.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+
+                var response = await _httpClient.GetStringAsync(VersionControl.GitHubVersionCheckUrl);
+                var githubRelease = JsonSerializer.Deserialize<GitHubRelease>(response, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (githubRelease?.assets == null || githubRelease.assets.Length == 0)
+                {
+                    return null;
+                }
+
+                string? exeUrl = null;
+                string? anyUrl = null;
+                string? checksum = null;
+
+                foreach (var asset in githubRelease.assets)
+                {
+                    if (asset.name == null) continue;
+                    var name = asset.name.ToLowerInvariant();
+                    if (name.EndsWith(".sha256") || name.EndsWith(".sha256.txt"))
+                    {
+                        try
+                        {
+                            var txt = await _httpClient.GetStringAsync(asset.browser_download_url);
+                            // extract hex string
+                            var parts = txt.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var p in parts)
+                            {
+                                if (p.Length >= 64 && p.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                                {
+                                    checksum = p.ToLowerInvariant();
+                                    break;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
+                    if (asset.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return new DownloadInfo { Url = asset.browser_download_url, Checksum = checksum };
+                    }
+                    if (asset.name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && exeUrl == null)
+                    {
+                        exeUrl = asset.browser_download_url;
+                    }
+                    if (anyUrl == null)
+                    {
+                        anyUrl = asset.browser_download_url;
+                    }
+                }
+
+                return new DownloadInfo { Url = exeUrl ?? anyUrl, Checksum = checksum };
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -304,9 +382,11 @@ namespace Rpg_Dungeon.Systems
                 Console.WriteLine("  🔄 Starting auto-update...");
                 Console.WriteLine();
 
-                // Get download URL
+                // Get download URL and optional checksum
                 Console.WriteLine("  📡 Fetching download information...");
-                var downloadUrl = GetDownloadUrl(remoteVersion).Result;
+                var info = GetDownloadInfo(remoteVersion).GetAwaiter().GetResult();
+                var downloadUrl = info?.Url;
+                var expectedChecksum = info?.Checksum;
 
                 if (string.IsNullOrWhiteSpace(downloadUrl))
                 {
@@ -326,18 +406,107 @@ namespace Rpg_Dungeon.Systems
 
                 Console.WriteLine("  ⬇️  Downloading update...");
                 DownloadFileAsync(downloadUrl, tempZipPath).Wait();
+                // Verify checksum if provided
+                if (!string.IsNullOrWhiteSpace(expectedChecksum))
+                {
+                    Console.WriteLine("  🔐 Verifying checksum...");
+                    try
+                    {
+                        using var fs = File.OpenRead(tempZipPath);
+                        using var sha = System.Security.Cryptography.SHA256.Create();
+                        var hash = sha.ComputeHash(fs);
+                        var actual = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+                        if (!string.Equals(actual, expectedChecksum, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Console.WriteLine("  ❌ Checksum mismatch! Aborting update.");
+                            ErrorLogger.LogWarning($"Checksum mismatch: expected {expectedChecksum} actual {actual}", "Updater aborted");
+                            OpenGitHubReleases();
+                            return;
+                        }
+                        Console.WriteLine("  ✅ Checksum OK");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"  ❌ Checksum verification failed: {ex.Message}");
+                        ErrorLogger.LogWarning($"Checksum verification error: {ex.Message}", "Updater");
+                        OpenGitHubReleases();
+                        return;
+                    }
+                }
                 Console.WriteLine("  ✅ Download complete!");
                 Console.WriteLine();
 
-                // Extract files
-                Console.WriteLine("  📦 Extracting files...");
+                // Extract or prepare files depending on asset type
+                Console.WriteLine("  📦 Preparing downloaded files...");
                 if (Directory.Exists(tempExtractPath))
                 {
                     Directory.Delete(tempExtractPath, true);
                 }
-                ZipFile.ExtractToDirectory(tempZipPath, tempExtractPath);
-                Console.WriteLine("  ✅ Extraction complete!");
+
+                var urlLower = downloadUrl.ToLowerInvariant();
+                if (urlLower.EndsWith(".zip"))
+                {
+                    ZipFile.ExtractToDirectory(tempZipPath, tempExtractPath);
+                    Console.WriteLine("  ✅ Extraction complete!");
+                }
+                else if (urlLower.EndsWith(".exe"))
+                {
+                    // Put the single exe into a folder so the updater script can copy it
+                    Directory.CreateDirectory(tempExtractPath);
+                    var exeName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
+                    var destExePath = Path.Combine(tempExtractPath, exeName);
+                    File.Copy(tempZipPath, destExePath, true);
+                    Console.WriteLine("  ✅ Executable prepared for installation!");
+                }
+                else
+                {
+                    // Unknown type - attempt to extract as zip, may fail
+                    ZipFile.ExtractToDirectory(tempZipPath, tempExtractPath);
+                    Console.WriteLine("  ✅ Extraction complete!");
+                }
                 Console.WriteLine();
+
+                // Prompt for confirmation before proceeding
+                Console.WriteLine("  ⚠️  About to install an update. This will replace the current installation.");
+                Console.WriteLine("  Press 'Y' to continue or any other key to cancel...");
+                var confirmKey = Console.ReadKey(true);
+                if (confirmKey.KeyChar != 'Y' && confirmKey.KeyChar != 'y')
+                {
+                    Console.WriteLine("  ❌ Update cancelled by user.");
+                    return;
+                }
+
+                // Offer to create a full backup of the current installation before proceeding
+                Console.WriteLine();
+                Console.WriteLine("  💾 Create a full backup of the current installation before updating? (Y/n)");
+                var backupChoice = Console.ReadKey(true);
+                if (backupChoice.KeyChar == 'N' || backupChoice.KeyChar == 'n')
+                {
+                    Console.WriteLine("  ⚠️  Proceeding without a full backup.");
+                }
+                else
+                {
+                    try
+                    {
+                        var currentDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+                        var backupZip = Path.Combine(Path.GetTempPath(), $"rpg_backup_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+                        Console.WriteLine($"  💾 Creating backup to: {backupZip}");
+                        ZipFile.CreateFromDirectory(currentDir, backupZip, CompressionLevel.Fastest, false);
+                        Console.WriteLine("  ✅ Full backup created.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"  ❌ Backup failed: {ex.Message}");
+                        ErrorLogger.LogWarning($"Full backup failed: {ex.Message}", "Updater backup");
+                        Console.WriteLine("  Press 'Y' to continue without backup or any other key to cancel...");
+                        var bk = Console.ReadKey(true);
+                        if (bk.KeyChar != 'Y' && bk.KeyChar != 'y')
+                        {
+                            Console.WriteLine("  ❌ Update cancelled by user due to backup failure.");
+                            return;
+                        }
+                    }
+                }
 
                 // Create updater script
                 string updaterScript = CreateUpdaterScript(tempExtractPath);
@@ -350,13 +519,42 @@ namespace Rpg_Dungeon.Systems
                 Console.WriteLine();
                 Console.WriteLine("  Please wait...");
 
-                Process.Start(new ProcessStartInfo
+                // Launch updater script in a new shell so it can replace files (and capture any elevation needed)
+                var psi = new ProcessStartInfo
                 {
                     FileName = "powershell.exe",
-                    Arguments = $"-ExecutionPolicy Bypass -WindowStyle Hidden -File \"{updaterScript}\"",
-                    UseShellExecute = false,
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{updaterScript}\"",
+                    UseShellExecute = true,
                     CreateNoWindow = true
-                });
+                };
+
+                try
+                {
+                    Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    // If starting failed (likely UAC/elevation), try launching explorer to prompt elevation
+                    ErrorLogger.LogWarning($"Failed to start updater directly: {ex.Message}", "Updater launch");
+                    try
+                    {
+                        var elevate = new ProcessStartInfo
+                        {
+                            FileName = "powershell.exe",
+                            Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{updaterScript}\"",
+                            UseShellExecute = true,
+                            Verb = "runas"
+                        };
+                        Process.Start(elevate);
+                    }
+                    catch (Exception ex2)
+                    {
+                        Console.WriteLine($"  ❌ Failed to launch updater: {ex2.Message}");
+                        ErrorLogger.LogWarning($"Updater elevation failed: {ex2.Message}", "Updater");
+                        OpenGitHubReleases();
+                        return;
+                    }
+                }
 
                 System.Threading.Thread.Sleep(2000);
                 Environment.Exit(0);
@@ -395,16 +593,27 @@ namespace Rpg_Dungeon.Systems
                     return null;
                 }
 
-                // Find the zip file
+                // Prefer zip, then exe, then any asset
+                string? exeUrl = null;
+                string? anyUrl = null;
                 foreach (var asset in githubRelease.assets)
                 {
-                    if (asset.name?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) == true)
+                    if (asset.name == null) continue;
+                    if (asset.name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                     {
                         return asset.browser_download_url;
                     }
+                    if (asset.name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && exeUrl == null)
+                    {
+                        exeUrl = asset.browser_download_url;
+                    }
+                    if (anyUrl == null)
+                    {
+                        anyUrl = asset.browser_download_url;
+                    }
                 }
 
-                return null;
+                return exeUrl ?? anyUrl;
             }
             catch
             {
@@ -452,13 +661,17 @@ namespace Rpg_Dungeon.Systems
         /// </summary>
         private static string CreateUpdaterScript(string extractPath)
         {
-            string currentDir = AppDomain.CurrentDomain.BaseDirectory;
-            string currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? "Night.exe";
+            string currentDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+            string currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? Path.Combine(currentDir, "Night.exe");
             string scriptPath = Path.Combine(Path.GetTempPath(), "rpg_updater.ps1");
 
             // Build script line by line to avoid string literal issues
             var scriptLines = new System.Collections.Generic.List<string>
             {
+                "$logPath = Join-Path $env:TEMP 'rpg_updater.log'",
+                "function Log([string]$m) { Add-Content -Path $logPath -Value (Get-Date -Format o) -ErrorAction SilentlyContinue; Add-Content -Path $logPath -Value $m -ErrorAction SilentlyContinue }",
+                "$null = New-Item -Path $logPath -ItemType File -Force -ErrorAction SilentlyContinue",
+                "Log 'Starting RPG Dungeon Auto-Updater'",
                 "Write-Host 'RPG Dungeon Auto-Updater' -ForegroundColor Cyan",
                 "Write-Host '=========================' -ForegroundColor Cyan",
                 "Write-Host ''",
@@ -476,6 +689,7 @@ namespace Rpg_Dungeon.Systems
                 "}",
                 "",
                 "Write-Host 'Installing update...' -ForegroundColor Yellow",
+                "Log 'Installing update...'",
                 "Write-Host ''",
                 "",
                 "# Copy new files",
@@ -505,13 +719,13 @@ namespace Rpg_Dungeon.Systems
                 "",
                 "    Write-Host ''",
                 "    Write-Host '[OK] Update installed successfully!' -ForegroundColor Green",
+                "    Log '[OK] Update installed successfully!'",
                 "    Write-Host ''",
                 "    Write-Host 'Restarting game...' -ForegroundColor Cyan",
                 "    Start-Sleep -Seconds 2",
                 "",
                 "    # Restart game",
-                $"    Start-Process -FilePath '{currentExe}' -WorkingDirectory $targetDir",
-                "",
+                $"    Start-Process -FilePath '{currentExe.Replace("'", "''")}' -WorkingDirectory $targetDir",
                 "    # Cleanup",
                 "    Start-Sleep -Seconds 2",
                 "    Remove-Item -Path $sourceDir -Recurse -Force -ErrorAction SilentlyContinue",
@@ -535,7 +749,7 @@ namespace Rpg_Dungeon.Systems
                 "    }",
                 "",
                 "    Write-Host 'Restarting game...' -ForegroundColor Cyan",
-                $"    Start-Process -FilePath '{currentExe}' -WorkingDirectory $targetDir",
+                $"    Start-Process -FilePath '{currentExe.Replace("'", "''")}' -WorkingDirectory $targetDir",
                 "",
                 "    Start-Sleep -Seconds 5",
                 "}"
@@ -546,5 +760,24 @@ namespace Rpg_Dungeon.Systems
             return scriptPath;
         }
 
+        /// <summary>
+        /// Helper used for local simulation/testing: prepares a fake extracted folder and returns the generated PowerShell script contents.
+        /// This does not execute the script.
+        /// </summary>
+        public static string SimulateAndGetScript()
+        {
+            var tempExtractPath = Path.Combine(Path.GetTempPath(), "rpg_update_sim");
+            if (Directory.Exists(tempExtractPath))
+            {
+                try { Directory.Delete(tempExtractPath, true); } catch { }
+            }
+            Directory.CreateDirectory(tempExtractPath);
+            // create a harmless dummy file to simulate extracted assets
+            File.WriteAllText(Path.Combine(tempExtractPath, "README.txt"), "This is a simulated update package.");
+
+            var scriptPath = CreateUpdaterScript(tempExtractPath);
+            var contents = File.ReadAllText(scriptPath);
+            return contents;
+        }
             }
         }

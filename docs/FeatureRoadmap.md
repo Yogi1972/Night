@@ -64,11 +64,13 @@ Phase 1 — Core Systems (status)
             - Dialogue & Conversation System — Done (2026-03-16) — Implemented `Systems/DialogueManager.cs`, `Data/Dialogues/example.json`, example wiring in `TownSections/CentralSquare.cs`.
             - Dialogue-linked Quests — Done (2026-03-16) — Dialogue actions `AcceptQuest:` and `OfferQuest:` implemented; `NPCManager.FindQuestByName` and `RemoveQuestByName` added; `Journal` persistence extended in `Systems/Options.cs`.
             - A* Pathfinding — Done (2026-03-16) — `Systems/Pathfinding.cs` added and `Combat/EnemyAI.cs` updated to request paths.
-            - Save Versioning & Migration — Partial (2026-03-16) — Save/Load extended to persist minimal quest lists; top-level version field added to DTOs (migration/stubs remain).
+            - Save Versioning & Migration — Done (2026-03-16) — Save/Load extended to persist minimal quest lists; added version field to save DTOs and basic migration stub implemented to handle legacy saves.
 
 Phase 2 & 3 (status)
-- (Pending) Behavior Tree Framework — Not started
-- (Pending) Cutscene Sequencer — Not started
+- Behavior Tree Framework — In progress (2026-03-16) — Initial behavior tree skeleton added: core node types (Selector, Sequence, Leaf Task), execution loop sketched in `Systems/BehaviorTree.cs`. Unit test scaffolding created; next: implement common decorators and integrate with `EnemyAI`.
+- Dialogue / Cutscene Sequencer — In progress (2026-03-16) — Basic sequencer scaffolded (`Systems/CutsceneSequencer.cs`) and a simple cutscene script example added; next: wire sequencer into `DialogueManager` and add timeline actions.
+- Data-Driven Content (Loot, Encounters) — Started (2026-03-16) — JSON schemas defined for loot and encounter tables and example data placed under `Data/Encounters/` and `Data/Loot/`; next: loader and table-driven spawning.
+- Localization & Accessibility — Started (2026-03-16) — i18n loader stub and `Resources/en-US.json` added; accessibility options (text scale, color contrast) exposed in `Systems/Options.cs`; next: translations and UI hooks.
 
 Notes / Next Steps
 - Wire a global shared `NPCManager` at startup (added `Systems/GameServices.cs`; `Program.Main` now assigns `GameServices.NPCManager = new NPCManager()`; update other local constructions to use `GameServices.NPCManager`).

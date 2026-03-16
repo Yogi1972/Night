@@ -24,10 +24,20 @@ namespace Rpg_Dungeon
                 Console.WriteLine("💡 You can use this seed to generate the same world again!");
             }
 
+            // Generate world map (summary) first
+            var wgPreview = new WorldGenerator(worldSeed);
+            var previewTowns = wgPreview.GenerateMajorTowns();
+            var previewSettlements = wgPreview.GenerateSettlements();
+            Console.WriteLine($"\nWorld preview: {previewTowns.Count} major towns, {previewSettlements.Count} settlements");
+
             int partySize = GetPartySize();
             var party = CreateParty(partySize, false);
 
             Console.WriteLine($"\nCreated {party.Count} characters:\n{string.Join("\n", GetPartyDescriptions(party))}");
+            // After character creation, show opening sequence then start game
+            try { Console.Clear(); } catch { Console.WriteLine("\n\n"); }
+            if (OpeningHook.ShouldShowOpening()) OpeningHook.ShowOpeningSequence();
+
             Thread.Sleep(2000);
             GameLoopManager.Run(party, false, worldSeed);
         }
@@ -86,6 +96,11 @@ namespace Rpg_Dungeon
                 Console.WriteLine($"\n🌍 Using world seed: {WorldGenerator.SeedToString(worldSeed.Value)}");
             }
 
+            // Generate and display a quick world preview before character creation
+            var wgPreview = new WorldGenerator(worldSeed);
+            var previewTowns = wgPreview.GenerateMajorTowns();
+            Console.WriteLine($"\nWorld preview: {previewTowns.Count} major towns will be generated.");
+
             int partySize = GetPartySize("Enter number of players (1-4): ");
             var party = CreateParty(partySize, true);
 
@@ -99,6 +114,8 @@ namespace Rpg_Dungeon
             }
             Console.WriteLine("\n💡 Tip: Use option 7 in the main menu to configure multiplayer settings!");
             Thread.Sleep(3000);
+            try { Console.Clear(); } catch { Console.WriteLine("\n\n"); }
+            if (OpeningHook.ShouldShowOpening()) OpeningHook.ShowOpeningSequence();
             GameLoopManager.Run(party, true, worldSeed);
         }
 

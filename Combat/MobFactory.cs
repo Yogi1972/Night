@@ -56,6 +56,21 @@ namespace Rpg_Dungeon
             return CreateMobFromTemplate(_rng.Next(_mobTemplates.Count), mobLevel);
         }
 
+        // Deterministic overload that accepts a Random instance
+        public static Mob GetRandomMobForParty(List<Character> party, int targetLevel, Random? rng)
+        {
+            rng ??= _rng;
+            if (party == null || party.Count == 0)
+            {
+                return CreateMobFromTemplate(0, 1);
+            }
+
+            int partyAvgLevel = (int)party.Average(c => c.Level);
+            int mobLevel = Math.Max(1, targetLevel > 0 ? targetLevel : partyAvgLevel);
+
+            return CreateMobFromTemplate(rng.Next(_mobTemplates.Count), mobLevel);
+        }
+
         private static Mob CreateMobFromTemplate(int templateIndex, int level)
         {
             var template = _mobTemplates[templateIndex % _mobTemplates.Count];

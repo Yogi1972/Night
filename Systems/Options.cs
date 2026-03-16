@@ -871,7 +871,8 @@ namespace Rpg_Dungeon
             public List<QuestData>? CompletedQuests { get; set; }
 
             // Format version for migration
-            public int Version { get; set; } = SaveFormatVersion;
+            // Default to 0 so older save files that lack the Version field will be treated as older formats
+            public int Version { get; set; } = 0;
         }
 
         internal class CharacterData

@@ -24,20 +24,7 @@ namespace Rpg_Dungeon
                 Console.WriteLine("\n\n\n");
             }
 
-            // Check if player wants to see the opening hook
-            if (OpeningHook.ShouldShowOpening())
-            {
-                OpeningHook.ShowOpeningSequence();
-
-                try
-                {
-                    Console.Clear();
-                }
-                catch
-                {
-                    Console.WriteLine("\n\n\n");
-                }
-            }
+            // Opening sequence moved to occur after map & character creation in GameInitializer
 
             var originalColor = Console.ForegroundColor;
             Console.ForegroundColor = ConsoleColor.Cyan;

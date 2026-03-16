@@ -29,7 +29,7 @@ namespace Rpg_Dungeon
     {
         #region Fields
 
-        private readonly Random _rng = new Random();
+        private readonly Random _rng;
         private AIBehaviorType _behaviorType;
         private bool _isBerserkActive = false;
         private int _originalHealth = 100;
@@ -47,9 +47,10 @@ namespace Rpg_Dungeon
 
         #region Constructor
 
-        public EnemyAI(AIBehaviorType behaviorType = AIBehaviorType.Balanced)
+        public EnemyAI(AIBehaviorType behaviorType = AIBehaviorType.Balanced, Random? rng = null)
         {
             _behaviorType = behaviorType;
+            _rng = rng ?? new Random();
         }
 
         /// <summary>
@@ -97,7 +98,7 @@ namespace Rpg_Dungeon
                 }
             }
 
-            return new EnemyAI(behavior);
+            return new EnemyAI(behavior, rng);
         }
 
         #endregion

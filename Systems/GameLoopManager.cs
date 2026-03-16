@@ -1,3 +1,4 @@
+
 using Night.Characters;
 using System;
 using System.Collections.Generic;
@@ -45,7 +46,9 @@ namespace Rpg_Dungeon
             }
 
             var mainStoryline = new MainStoryline();
-            var fogOfWarMap = new FogOfWarMap();
+            var fogOfWarMap = new FogOfWarMap(worldSeed);
+            // register fog map for global services (used by travel/pathfinding)
+            Rpg_Dungeon.Systems.GameServices.FogOfWarMap = fogOfWarMap;
 
             weather.SetTimeTracker(timeTracker);
 

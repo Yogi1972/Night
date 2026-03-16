@@ -1,8 +1,11 @@
 using Night.Characters;
+using System.IO;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Rpg_Dungeon
 {
@@ -48,6 +51,7 @@ namespace Rpg_Dungeon
 
     #endregion
 
+
     #region Fog of War Map
 
     internal class FogOfWarMap
@@ -55,21 +59,21 @@ namespace Rpg_Dungeon
         #region Fields
 
         private readonly List<MapNode> _mapNodes;
-        private readonly int _mapWidth;
-        private readonly int _mapHeight;
+        private Random _rng;
         private string _currentLocationName;
 
         #endregion
 
         #region Constructor
 
-        public FogOfWarMap()
+        public FogOfWarMap(int? seed = null)
         {
-            _mapWidth = 100;
-            _mapHeight = 40;
+            // map dimensions were previously stored but are not used by the fog/hex system
             _mapNodes = new List<MapNode>();
             _currentLocationName = "Havenbrook";
+            _rng = new Random(seed ?? 42);
             InitializeMapNodes();
+            // Hex map functionality has been removed; Fog of War operates over map nodes only now.
         }
 
         #endregion
@@ -183,12 +187,23 @@ namespace Rpg_Dungeon
             _mapNodes.Add(new MapNode("Shadowflame Lair", 10, 38, LocationCategory.Dungeon, 27, false));
         }
 
+        private void MapNodesToHexTiles()
+        {
+            // Hex grid removed. This method now ensures nodes that are marked discovered
+            // are available for rendering/export.
+            foreach (var node in _mapNodes)
+            {
+                // No-op for backward compatibility; kept for potential future usage.
+            }
+        }
+
         #endregion
 
         #region Map Display
 
         public void DisplayMap(List<Character> party, MainStoryline storyline)
         {
+            // Render a simple discovered-node list (legend and zoom controls removed)
             while (true)
             {
                 Console.Clear();
@@ -202,46 +217,17 @@ namespace Rpg_Dungeon
                     node.IsCurrentLocation = node.LocationName == _currentLocationName;
                 }
 
-                // Create the map grid
-                char[,] mapGrid = new char[_mapHeight, _mapWidth];
-
-                // First, fill with terrain features (unsettled areas)
-                Random terrainRng = new Random(42); // Fixed seed for consistent terrain
-                for (int y = 0; y < _mapHeight; y++)
+                // Simple node list as hex rendering removed
+                var centerNode = _mapNodes.FirstOrDefault(n => n.LocationName == _currentLocationName);
+                var visible = _mapNodes.Where(n => n.IsDiscovered).ToList();
+                Console.WriteLine("\nDiscovered Locations Visible:");
+                foreach (var n in visible)
                 {
-                    for (int x = 0; x < _mapWidth; x++)
-                    {
-                        // Create natural terrain patterns
-                        mapGrid[y, x] = GenerateTerrainChar(x, y, terrainRng);
-                    }
+                    string current = n.LocationName == _currentLocationName ? " <- YOU ARE HERE" : "";
+                    Console.WriteLine($"  {n.GetMapIcon()} {n.LocationName} (x:{n.X}, y:{n.Y}) {current}");
                 }
 
-                // Place discovered locations on top of terrain
-                foreach (var node in _mapNodes.Where(n => n.IsDiscovered))
-                {
-                    if (node.Y < _mapHeight && node.X < _mapWidth)
-                    {
-                        mapGrid[node.Y, node.X] = node.GetMapIcon()[0];
-                    }
-                }
-
-                // Draw the map
-                Console.WriteLine("┌" + new string('─', _mapWidth) + "┐");
-                for (int y = 0; y < _mapHeight; y++)
-                {
-                    Console.Write("│");
-                    for (int x = 0; x < _mapWidth; x++)
-                    {
-                        Console.Write(mapGrid[y, x]);
-                    }
-                    Console.WriteLine("│");
-                }
-                Console.WriteLine("└" + new string('─', _mapWidth) + "┘");
-
-                // Legend
-                Console.WriteLine("\n📍 Legend:");
-                Console.WriteLine("  ★ = Your Location  |  ◈ = Major Town  |  ■ = Settlement  |  ▲ = Camp  |  ☠ = Enemy Camp");
-                Console.WriteLine("  ~ = Water  |  ^ = Mountains  |  ≋ = Desert  |  ░ = Forest  |  □ = Plains  |  █ = Undiscovered");
+                // Legend and view controls removed
 
                 Console.WriteLine($"\n📍 Current Location: {_currentLocationName}");
 
@@ -254,9 +240,10 @@ namespace Rpg_Dungeon
                 Console.WriteLine("S) View Story Objectives");
                 Console.WriteLine("T) Tips for Exploration");
                 Console.WriteLine("0) Close Map");
-                Console.Write("\nChoice: ");
-
-                var choice = Console.ReadLine()?.Trim().ToUpper() ?? "";
+                Console.Write("\nChoice (press a single key): ");
+                var keyInfo = Console.ReadKey(true);
+                var choice = keyInfo.KeyChar.ToString().ToUpper();
+                Console.WriteLine(choice);
 
                 switch (choice)
                 {
@@ -271,6 +258,7 @@ namespace Rpg_Dungeon
                     case "T":
                         DisplayExplorationTips();
                         break;
+                    // view/zoom commands removed
                     case "0":
                         return;
                     default:
@@ -372,6 +360,17 @@ namespace Rpg_Dungeon
         public void SetCurrentLocation(string locationName)
         {
             _currentLocationName = locationName;
+            // Optionally reveal around current town on hex map
+            var center = _mapNodes.FirstOrDefault(n => n.LocationName == locationName);
+            if (center != null)
+            {
+                // Reveal nodes within a simple Manhattan radius
+                foreach (var node in _mapNodes)
+                {
+                    int distance = Math.Abs(node.X - center.X) + Math.Abs(node.Y - center.Y);
+                    if (distance <= 3) node.IsDiscovered = true;
+                }
+            }
         }
 
         public void RevealNearbyLocations(string centerLocation, int radius)
@@ -384,16 +383,73 @@ namespace Rpg_Dungeon
                 if (node.IsDiscovered) continue;
 
                 int distance = Math.Abs(node.X - centerNode.X) + Math.Abs(node.Y - centerNode.Y);
-                if (distance <= radius)
-                {
-                    node.IsDiscovered = true;
-                }
+                    if (distance <= radius)
+                    {
+                        node.IsDiscovered = true;
+                    }
             }
+
         }
 
         public int GetDiscoveredCount() => _mapNodes.Count(n => n.IsDiscovered);
 
         public int GetTotalLocations() => _mapNodes.Count;
+
+        #endregion
+
+        #region Unity Export
+
+        // Export map nodes and hex tiles to a folder consumable by Unity (JSON + tileset copy)
+        public void ExportToUnity(string outDir)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(outDir)) outDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UnityExport");
+                Directory.CreateDirectory(outDir);
+
+                // export map nodes (wrapped for Unity JsonUtility)
+                var nodes = _mapNodes.Select(n => new
+                {
+                    name = n.LocationName,
+                    x = n.X,
+                    y = n.Y,
+                    type = n.Type.ToString(),
+                    requiredLevel = n.RequiredLevel,
+                    discovered = n.IsDiscovered
+                }).ToList();
+
+                var nodesJson = JsonSerializer.Serialize(new { nodes = nodes }, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(Path.Combine(outDir, "mapnodes.json"), nodesJson);
+
+
+
+                // copy Unity stub scripts if present in project
+                var stubDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UnityStubs");
+                if (Directory.Exists(stubDir))
+                {
+                    CopyDirectory(stubDir, Path.Combine(outDir, "UnityStubs"));
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ExportToUnity failed: {ex.Message}");
+            }
+        }
+
+        private void CopyDirectory(string sourceDir, string targetDir)
+        {
+            Directory.CreateDirectory(targetDir);
+            foreach (var file in Directory.GetFiles(sourceDir))
+            {
+                var dest = Path.Combine(targetDir, Path.GetFileName(file));
+                try { File.Copy(file, dest, true); } catch { }
+            }
+            foreach (var dir in Directory.GetDirectories(sourceDir))
+            {
+                var destDir = Path.Combine(targetDir, Path.GetFileName(dir));
+                CopyDirectory(dir, destDir);
+            }
+        }
 
         #endregion
 
