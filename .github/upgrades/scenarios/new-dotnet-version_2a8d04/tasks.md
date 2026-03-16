@@ -10,7 +10,7 @@ This document tracks the execution of the RPG Dungeon console application upgrad
 
 ## Tasks
 
-### [✓] TASK-001: Verify prerequisites *(Completed: 2026-03-15 01:44)*
+### [✓] TASK-001: Verify prerequisites *(Completed: 2026-03-16 01:44)*
 **References**: Plan §Prerequisites
 
 - [✓] (1) Verify .NET 10.0 SDK installed per Plan §Prerequisites
@@ -18,7 +18,7 @@ This document tracks the execution of the RPG Dungeon console application upgrad
 
 ---
 
-### [✓] TASK-002: Atomic project conversion and framework upgrade *(Completed: 2026-03-15 01:46)*
+### [✓] TASK-002: Atomic project conversion and framework upgrade *(Completed: 2026-03-16 01:46)*
 **References**: Plan §SDK-Style Project Conversion, Plan §Target Framework Update, Plan §Breaking Changes Catalog
 
 - [✓] (1) Convert Night.csproj from classic format to SDK-style format per Plan §SDK-Style Project Conversion (use automated conversion tool or manual approach)

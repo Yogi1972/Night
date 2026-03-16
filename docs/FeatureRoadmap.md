@@ -61,10 +61,10 @@ Phase Status & Progress Tracking
 - Update this section after completing or making progress on an item. Add short entries with Date, Author and Notes.
 
 Phase 1 — Core Systems (status)
-- Dialogue & Conversation System — Done (2026-03-15) — Implemented `Systems/DialogueManager.cs`, `Data/Dialogues/example.json`, example wiring in `TownSections/CentralSquare.cs`.
-- Dialogue-linked Quests — Done (2026-03-15) — Dialogue actions `AcceptQuest:` and `OfferQuest:` implemented; `NPCManager.FindQuestByName` and `RemoveQuestByName` added; `Journal` persistence extended in `Systems/Options.cs`.
-- A* Pathfinding — Done (2026-03-15) — `Systems/Pathfinding.cs` added and `Combat/EnemyAI.cs` updated to request paths.
-- Save Versioning & Migration — Partial (2026-03-15) — Save/Load extended to persist minimal quest lists; top-level version field added to DTOs (migration/stubs remain).
+            - Dialogue & Conversation System — Done (2026-03-16) — Implemented `Systems/DialogueManager.cs`, `Data/Dialogues/example.json`, example wiring in `TownSections/CentralSquare.cs`.
+            - Dialogue-linked Quests — Done (2026-03-16) — Dialogue actions `AcceptQuest:` and `OfferQuest:` implemented; `NPCManager.FindQuestByName` and `RemoveQuestByName` added; `Journal` persistence extended in `Systems/Options.cs`.
+            - A* Pathfinding — Done (2026-03-16) — `Systems/Pathfinding.cs` added and `Combat/EnemyAI.cs` updated to request paths.
+            - Save Versioning & Migration — Partial (2026-03-16) — Save/Load extended to persist minimal quest lists; top-level version field added to DTOs (migration/stubs remain).
 
 Phase 2 & 3 (status)
 - (Pending) Behavior Tree Framework — Not started
