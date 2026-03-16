@@ -25,7 +25,15 @@ namespace Rpg_Dungeon
             var achievementTracker = new AchievementTracker();
             var weather = new Weather();
             var timeTracker = new TimeOfDay();
-            var journal = new Journal();
+
+            // Use shared Journal when available; otherwise create and register one
+            var journal = Rpg_Dungeon.Systems.GameServices.Journal;
+            if (journal == null)
+            {
+                journal = new Journal();
+                Rpg_Dungeon.Systems.GameServices.Journal = journal;
+            }
+
             var worldMap = new Map(weather, timeTracker, worldSeed);
 
             // Use shared NPCManager when available; otherwise create and register one
