@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Night.Characters;
 
 namespace Rpg_Dungeon
@@ -1071,6 +1072,43 @@ namespace Rpg_Dungeon
                 return npcs;
             }
             return new List<NPC>();
+        }
+
+        // Find a quest by name across all NPCs. Returns the Quest instance if found, otherwise null.
+        public Quest? FindQuestByName(string questName)
+        {
+            if (string.IsNullOrWhiteSpace(questName)) return null;
+            foreach (var kv in _npcsByLocation)
+            {
+                foreach (var npc in kv.Value)
+                {
+                    var q = npc.AvailableQuests.FirstOrDefault(x => string.Equals(x.Name, questName, StringComparison.OrdinalIgnoreCase));
+                    if (q != null) return q;
+                }
+            }
+            return null;
+        }
+
+        // Remove a quest from any NPC that offers it (used after a player accepts a quest)
+        public bool RemoveQuestByName(string questName)
+        {
+            if (string.IsNullOrWhiteSpace(questName)) return false;
+            foreach (var kv in _npcsByLocation)
+            {
+                for (int i = kv.Value.Count - 1; i >= 0; i--)
+                {
+                    var npc = kv.Value[i];
+                    for (int j = npc.AvailableQuests.Count - 1; j >= 0; j--)
+                    {
+                        if (string.Equals(npc.AvailableQuests[j].Name, questName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            npc.AvailableQuests.RemoveAt(j);
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         public void SpawnRandomNPC(string locationName, LocationCategory locationType)

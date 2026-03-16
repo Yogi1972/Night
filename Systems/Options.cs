@@ -22,7 +22,7 @@ namespace Rpg_Dungeon
 
         // Show the options menu. The menu enforces that the party must set up camp before saving or exiting.
         // Returns a loaded party if the player chooses to load a save; otherwise returns null.
-        public static List<Character>? ShowOptions(List<Character> party, bool isMultiplayer = false)
+        public static List<Character>? ShowOptions(List<Character> party, bool isMultiplayer = false, Journal? journal = null)
         {
             if (party == null) party = new List<Character>();
 
@@ -50,11 +50,11 @@ namespace Rpg_Dungeon
                         }
                         else
                         {
-                            SaveGameJson(party, isMultiplayer);
+                            SaveGameJson(party, isMultiplayer, journal);
                         }
                         break;
                     case "3":
-                        var loaded = LoadGameJson();
+                        var loaded = LoadGameJson(journal);
                         if (loaded != null)
                         {
                             Console.WriteLine("Game loaded.");
@@ -153,7 +153,7 @@ namespace Rpg_Dungeon
         }
 
         // Very simple save: writes party summary to a timestamped file in the current directory.
-        private static void SaveGameJson(List<Character> party, bool isMultiplayer)
+        private static void SaveGameJson(List<Character> party, bool isMultiplayer, Journal? journal)
         {
             try
             {
@@ -351,6 +351,34 @@ namespace Rpg_Dungeon
                     }).ToList()
                 };
 
+                // Persist simple journal state if provided
+                if (journal != null)
+                {
+                    save.ActiveQuests = journal.GetActiveQuests().Select(q => new QuestData
+                    {
+                        Name = q.Name,
+                        Description = q.Description,
+                        Type = q.Type.ToString(),
+                        Difficulty = q.Difficulty.ToString(),
+                        ObjectiveName = q.ObjectiveName,
+                        ObjectiveCount = q.ObjectiveCount,
+                        CurrentProgress = q.CurrentProgress,
+                        IsCompleted = q.IsCompleted
+                    }).ToList();
+
+                    save.CompletedQuests = journal.GetCompletedQuests().Select(q => new QuestData
+                    {
+                        Name = q.Name,
+                        Description = q.Description,
+                        Type = q.Type.ToString(),
+                        Difficulty = q.Difficulty.ToString(),
+                        ObjectiveName = q.ObjectiveName,
+                        ObjectiveCount = q.ObjectiveCount,
+                        CurrentProgress = q.CurrentProgress,
+                        IsCompleted = q.IsCompleted
+                    }).ToList();
+                }
+
                 var opts = new JsonSerializerOptions { WriteIndented = true };
                 var json = JsonSerializer.Serialize(save, opts);
                 File.WriteAllText(fileName, json, Encoding.UTF8);
@@ -513,7 +541,7 @@ namespace Rpg_Dungeon
 
         #region Load System
 
-        private static List<Character>? LoadGameJson()
+        private static List<Character>? LoadGameJson(Journal? journal)
         {
             try
             {
@@ -757,6 +785,46 @@ namespace Rpg_Dungeon
                     party.Add(ch);
                 }
 
+                // Restore journal quests if requested
+                if (journal != null)
+                {
+                    try
+                    {
+                        if (save.ActiveQuests != null)
+                        {
+                            foreach (var qd in save.ActiveQuests)
+                            {
+                                var type = QuestType.Collect;
+                                Enum.TryParse<QuestType>(qd.Type, out type);
+                                var diff = QuestDifficulty.Easy;
+                                Enum.TryParse<QuestDifficulty>(qd.Difficulty, out diff);
+                                var quest = new Quest(qd.Name ?? "", qd.Description ?? "", type, diff,
+                                                      qd.ObjectiveName ?? "Objective", qd.ObjectiveCount, qd.GoldReward, qd.ExperienceReward);
+                                quest.CurrentProgress = qd.CurrentProgress;
+                                if (qd.IsCompleted) quest.IsCompleted = true;
+                                journal.AddActiveQuest(quest);
+                            }
+                        }
+
+                        if (save.CompletedQuests != null)
+                        {
+                            foreach (var qd in save.CompletedQuests)
+                            {
+                                var type = QuestType.Collect;
+                                Enum.TryParse<QuestType>(qd.Type, out type);
+                                var diff = QuestDifficulty.Easy;
+                                Enum.TryParse<QuestDifficulty>(qd.Difficulty, out diff);
+                                var quest = new Quest(qd.Name ?? "", qd.Description ?? "", type, diff,
+                                                      qd.ObjectiveName ?? "Objective", qd.ObjectiveCount, qd.GoldReward, qd.ExperienceReward);
+                                quest.CurrentProgress = qd.CurrentProgress;
+                                quest.IsCompleted = true;
+                                journal.GetCompletedQuests().Add(quest);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
                 return party;
             }
             catch (Exception ex)
@@ -777,6 +845,9 @@ namespace Rpg_Dungeon
             public bool IsMultiplayer { get; set; }
             public DateTime Created { get; set; }
             public List<CharacterData> Party { get; set; } = new List<CharacterData>();
+            // Optional simple journal persistence
+            public List<QuestData>? ActiveQuests { get; set; }
+            public List<QuestData>? CompletedQuests { get; set; }
         }
 
         internal class CharacterData
@@ -850,6 +921,20 @@ namespace Rpg_Dungeon
         {
             public int SkillPoints { get; set; }
             public List<LearnedSkillData> LearnedSkills { get; set; } = new List<LearnedSkillData>();
+        }
+
+        internal class QuestData
+        {
+            public string Name { get; set; } = string.Empty;
+            public string? Description { get; set; }
+            public string Type { get; set; } = QuestType.Collect.ToString();
+            public string Difficulty { get; set; } = QuestDifficulty.Easy.ToString();
+            public string? ObjectiveName { get; set; }
+            public int ObjectiveCount { get; set; }
+            public int CurrentProgress { get; set; }
+            public bool IsCompleted { get; set; }
+            public int GoldReward { get; set; }
+            public int ExperienceReward { get; set; }
         }
 
         internal class LearnedSkillData

@@ -308,6 +308,28 @@ namespace Rpg_Dungeon
 
         #endregion
 
+        #region Pathfinding Integration
+
+        /// <summary>
+        /// Requests a path on a simple grid between two points using the central Pathfinding helper.
+        /// This is a small adapter so EnemyAI consumers can ask for a path without directly using Pathfinding types.
+        /// </summary>
+        public List<Pathfinding.GridPoint> GetPathToTarget(int startX, int startY, int goalX, int goalY, bool[,] walkableGrid)
+        {
+            var start = new Pathfinding.GridPoint(startX, startY);
+            var goal = new Pathfinding.GridPoint(goalX, goalY);
+            try
+            {
+                return Pathfinding.GetPath(start, goal, walkableGrid);
+            }
+            catch
+            {
+                return new List<Pathfinding.GridPoint>();
+            }
+        }
+
+        #endregion
+
         #region Display
 
         /// <summary>

@@ -1,0 +1,35 @@
+{
+  "Id": "example_1",
+  "Title": "Fountain Keeper Conversation",
+  "Nodes": [
+    {
+      "Id": "start",
+      "Text": "Old Tom: Ah, a traveler! What can I do for you?",
+      "Choices": [
+        { "Text": "Ask about the town.", "Next": "town_info" },
+        { "Text": "Do you have any work for us?", "Next": "quest_offer", "Action": "OfferQuest:Forge Master's Request" },
+        { "Text": "Farewell.", "Next": "end", "Action": "Goodbye" }
+      ]
+    },
+    {
+      "Id": "town_info",
+      "Text": "Old Tom: GreyWolf was founded by hardy folk. Beware the woods at night.",
+      "Choices": [
+        { "Text": "Thanks.", "Next": "end" }
+      ]
+    },
+    {
+      "Id": "quest_offer",
+      "Text": "Old Tom: I could use some help gathering iron. Bring me 5 ingots.",
+      "Choices": [
+        { "Text": "I'll do it.", "Next": "end", "Action": "AcceptQuest:Forge Master's Request" },
+        { "Text": "Not right now.", "Next": "end" }
+      ]
+    },
+    {
+      "Id": "end",
+      "Text": "Old Tom: Safe travels.",
+      "IsEnd": true
+    }
+  ]
+}

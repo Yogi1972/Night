@@ -29,7 +29,8 @@ namespace Rpg_Dungeon
 
         #region Public Methods
 
-        public void ShowCentralSquare(List<Character> party)
+        // Allow passing a Journal so dialogue actions can update quests
+        public void ShowCentralSquare(List<Character> party, Journal? journal = null)
         {
             Console.WriteLine("\n╔════════════════════════════════════════╗");
             Console.WriteLine("║         Town Square - GreyWolf        ║");
@@ -51,6 +52,18 @@ namespace Rpg_Dungeon
             Console.WriteLine("Paths lead to different districts in all directions.\n");
 
             ShowParty(party);
+
+            // Simple interaction option to speak with Old Tom (example)
+            Console.WriteLine("\nOptions: \n1) Speak to Old Tom (Fountain Keeper)\n0) Continue");
+            Console.Write("Your choice: ");
+            var input = Console.ReadLine()?.Trim() ?? "";
+            if (input == "1")
+            {
+                Console.WriteLine("\nYou approach Old Tom at the fountain...");
+                // Provide npcManager if available via a central game state in future; for now create a local one to resolve canonical quests
+                var npcManager = new NPCManager();
+                DialogueManager.StartExampleDialogue(journal, npcManager);
+            }
         }
 
         #endregion
