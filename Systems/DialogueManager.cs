@@ -33,6 +33,10 @@ namespace Rpg_Dungeon
         // can add/modify quests. Both parameters may be null for read-only conversations.
         public static void StartExampleDialogue(Journal? journal = null, NPCManager? npcManager = null)
         {
+            // Default to shared services when available
+            journal ??= Rpg_Dungeon.Systems.GameServices.Journal;
+            npcManager ??= Rpg_Dungeon.Systems.GameServices.NPCManager;
+
             var path = Path.Combine("Data", "Dialogues", "example.json");
             var dlg = LoadDialogue(path);
             if (dlg == null || dlg.Nodes == null || dlg.Nodes.Count == 0)
